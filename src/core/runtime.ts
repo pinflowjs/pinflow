@@ -4,34 +4,24 @@ import { acquireStorage } from './safe-storage';
 import type { Mode, PinflowConfig } from './types';
 import type { CaptureAnnotator, AnnotatorDeps } from './ui/capture-annotator';
 
+// Injected by tsup `define` at build time (src/globals.d.ts); the `typeof`
+// guard keeps vitest — which runs source without the define — working.
 export const version = typeof __PINFLOW_VERSION__ !== 'undefined' ? __PINFLOW_VERSION__ : '0.0.0';
+
 export interface LifecycleHandle {
   destroy(): void;
   refreshRoute(): void;
 }
-// Packed entries are compiled independently. This page-wide slot shares only
-// the stable public lifecycle contract, never mangled controller properties.
-const INSTANCE = Symbol.for('pinflow.active-instance');
-const registry = globalThis as typeof globalThis & { [INSTANCE]?: LifecycleHandle };
-export function destroy(): void {
-  registry[INSTANCE]?.destroy();
-}
 
-export function initialize<T extends CaptureAnnotator, E extends object>(
-  config: PinflowConfig,
-  create: (deps: AnnotatorDeps) => T,
-  methods: (annotator: T) => E,
-  inert: E,
-): E & LifecycleHandle {
-  if (typeof window === 'undefined' || typeof document === 'undefined') {
-    return { ...inert, destroy() {}, refreshRoute() {} };
-  }
-  try {
-    return initLive(config, create, methods, inert);
-  } catch (error) {
-    console.error('[pinflow] init failed:', error);
-    throw error;
-  }
+// One active widget per page, across entries: `pinflowjs` and
+// `pinflowjs/capture` are compiled independently, so the slot is a registered
+// symbol and holds only the public lifecycle contract — never a mangled
+// controller property, whose name differs per bundle.
+const SLOT = Symbol.for('pinflow.active-instance');
+const page = globalThis as typeof globalThis & { [SLOT]?: LifecycleHandle };
+
+export function destroy(): void {
+  page[SLOT]?.destroy();
 }
 
 // Twin of `isLocalOrigin` in src/voice/transcription/token.ts — duplicated
@@ -48,12 +38,33 @@ function isLocalOrigin(hostname: string): boolean {
   );
 }
 
-function initLive<T extends CaptureAnnotator, E extends object>(
+/**
+ * The init() body every entry shares. `create` picks the controller, `api`
+ * exposes its entry-specific methods, and `inert` is the complete handle for
+ * SSR and declined-identity installs.
+ */
+export function initialize<A extends CaptureAnnotator, H extends LifecycleHandle>(
   config: PinflowConfig,
-  create: (deps: AnnotatorDeps) => T,
-  methods: (annotator: T) => E,
-  inert: E,
-): E & LifecycleHandle {
+  Controller: new (deps: AnnotatorDeps) => A,
+  api: (annotator: A) => Omit<H, keyof LifecycleHandle>,
+  inert: H,
+): H {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return inert;
+  // Fail loud: hosts often call init() inside framework effects that swallow
+  // throws — surface the failure on the console before rethrowing.
+  try {
+    return initLive(config, Controller, api) ?? inert;
+  } catch (e) {
+    console.error('[pinflow] init failed:', e);
+    throw e;
+  }
+}
+
+function initLive<A extends CaptureAnnotator, H extends LifecycleHandle>(
+  config: PinflowConfig,
+  Controller: new (deps: AnnotatorDeps) => A,
+  api: (annotator: A) => Omit<H, keyof LifecycleHandle>,
+): H | null {
   // The devOnlyToken guardrail is a LOUD, EARLY failure by design (types.ts
   // promises "throws at init"). token.ts re-checks lazily as defense in depth.
   if (config.voice?.devOnlyToken && !isLocalOrigin(window.location.hostname)) {
@@ -61,10 +72,9 @@ function initLive<T extends CaptureAnnotator, E extends object>(
       'pinflow: voice.devOnlyToken needs a local origin — use voice.tokenEndpoint in production',
     );
   }
-  const current = registry[INSTANCE];
-  if (current) {
+  if (page[SLOT]) {
     console.warn('[pinflow] another instance is active — replacing it');
-    current.destroy();
+    page[SLOT].destroy();
   }
 
   const storage = acquireStorage();
@@ -85,9 +95,9 @@ function initLive<T extends CaptureAnnotator, E extends object>(
     }) ??
     (mode === 'builder' ? '__builder__' : null);
 
-  if (!reviewer && !stealth) return { ...inert, destroy() {}, refreshRoute() {} };
+  if (!reviewer && !stealth) return null;
 
-  const annotator = create({
+  const annotator = new Controller({
     config,
     reviewer,
     mode,
@@ -106,21 +116,18 @@ function initLive<T extends CaptureAnnotator, E extends object>(
   });
   const watcher = watchRoute(() => annotator.refreshRoute());
 
-  let disposed = false;
   const handle = {
-    ...methods(annotator),
+    ...api(annotator),
     destroy() {
-      if (disposed) return;
-      disposed = true;
       watcher.stop();
       annotator.destroy();
-      if (registry[INSTANCE] === handle) delete registry[INSTANCE];
+      if (page[SLOT] === handle) delete page[SLOT];
     },
     refreshRoute() {
       annotator.refreshRoute();
     },
-  };
-  registry[INSTANCE] = handle;
+  } as H;
+  page[SLOT] = handle;
   const n = annotator._count;
   console.info(
     // Fallback must mirror Annotator._activationMode's default.

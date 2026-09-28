@@ -31,6 +31,7 @@ import type {
   Mode,
   PinflowConfig,
   ReviewerStore,
+  TargetResolution,
   VoiceMeta,
 } from '../types';
 import { GestureController } from '../gesture/controller';
@@ -153,7 +154,7 @@ const MUTATIONS: MutationObserverInit = {
   attributes: true,
   attributeFilter: ['open', 'hidden', 'aria-hidden', 'class', 'style', 'id', 'data-testid'],
 };
-export class CaptureAnnotator {
+export abstract class CaptureAnnotator {
   protected readonly _ui: UIRoot;
   protected readonly _deps: AnnotatorDeps;
   // Host-defined logical screen key (config.routeKey) or the URL default —
@@ -165,7 +166,6 @@ export class CaptureAnnotator {
   protected _store: ReviewerStore;
   protected _baseline: ReviewerStore;
   private _healsPending = false;
-  private _started = false;
   protected _annotating = false;
   protected _pins = new Map<string, HTMLButtonElement>();
   // Marching-ants footprints for area comments (one per visible area comment,
@@ -185,6 +185,9 @@ export class CaptureAnnotator {
   // (0.9.0 removed the drawer).
   protected _dockEl: HTMLDivElement | null = null;
   protected _armEl: HTMLButtonElement | null = null;
+  // Filled by the full widget's _syncChip, which runs inside this constructor —
+  // a subclass field initializer would run after it and drop the chip.
+  protected _chipEl: HTMLButtonElement | null = null;
   // Identifies the in-flight source hydration, so a newer one supersedes it.
   private _hydrationToken: object | null = null;
   // True once ANY source() hydration has resolved and merged: "not in flight"
@@ -276,12 +279,6 @@ export class CaptureAnnotator {
           emptyStore(deps.config.project, deps.reviewer))
         : emptyStore(deps.config.project, '');
     this._baseline = { ...this._store, comments: this._store.comments.slice() };
-  }
-
-  /** Mount only after the concrete controller has initialized its fields. */
-  start(): void {
-    if (this._started || this._destroyed) return;
-    this._started = true;
     this._renderDock();
     this._renderPins();
     this._startGesture();
@@ -1936,7 +1933,7 @@ export class CaptureAnnotator {
     // The chip is exempt so a tap on it reaches _toggleSheet, which saves this
     // draft losslessly instead of the outside-tap discarding it (review #3).
     const disarm = this._armOutsideDismiss(
-      () => [wrap, this._dismissExempt()],
+      () => [wrap, this._chipEl],
       () => this._closeActiveInput(),
     );
     if (!frozen) {
@@ -2076,20 +2073,16 @@ export class CaptureAnnotator {
   // Only classify comments on the current route — we can't tell if a comment
   // on another route would resolve without navigating there, so those stay
   // "live" conservatively (spec §5.2 intent: orphaned = element missing now).
-  protected _resolution = (c: Comment): import('../types').TargetResolution => {
-    const report: import('../types').TargetResolution = { availability: 'not-checked' };
+  protected _resolution = (c: Comment): TargetResolution => {
+    const report: TargetResolution = { availability: 'not-checked' };
     if (c.route === this._routeKey()) resolveAnchor(c.anchor, document, report);
     return report;
   };
-  // Handoff hooks are inert for capture-only hosts. Full Annotator owns their UI.
-  protected _closePanel(): void {}
-  protected _positionPanel(): void {}
-  protected _syncChip(): void {}
-  protected _updateSheetTitle(): void {}
-  protected _dismissExempt(): HTMLElement | null {
-    return null;
-  }
-  protected _composerExport(): HTMLButtonElement | null {
-    return null;
-  }
+  // Handoff seams. The full Annotator draws the export UI behind them and the
+  // capture entry stubs them out; abstract, so neither bundle ships the other's.
+  protected abstract _closePanel(): void;
+  protected abstract _positionPanel(): void;
+  protected abstract _syncChip(): void;
+  protected abstract _updateSheetTitle(): void;
+  protected abstract _composerExport(): HTMLButtonElement | null;
 }

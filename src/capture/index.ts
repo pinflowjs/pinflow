@@ -21,7 +21,14 @@ export interface CaptureHandle extends LifecycleHandle {
 class CaptureSession extends CaptureAnnotator {
   constructor(deps: AnnotatorDeps) {
     super(deps, CAPTURE_STYLES);
-    this.start();
+  }
+  // No handoff chrome: the host owns submission, so every seam is inert.
+  protected _closePanel(): void {}
+  protected _positionPanel(): void {}
+  protected _syncChip(): void {}
+  protected _updateSheetTitle(): void {}
+  protected _composerExport(): null {
+    return null;
   }
   /** Read committed feedback without exposing mutable controller state. */
   getSnapshot(): CaptureSnapshot {
@@ -35,11 +42,13 @@ class CaptureSession extends CaptureAnnotator {
 }
 
 export function init(config: CaptureConfig): CaptureHandle {
-  return initialize(
+  return initialize<CaptureSession, CaptureHandle>(
     { ...config, mode: 'reviewer', exportUi: 'never' },
-    (deps) => new CaptureSession(deps),
+    CaptureSession,
     (annotator) => ({ getSnapshot: () => annotator.getSnapshot() }),
     {
+      destroy() {},
+      refreshRoute() {},
       getSnapshot: () => ({
         store: emptyStore(config.project, config.reviewer ?? ''),
         targets: {},

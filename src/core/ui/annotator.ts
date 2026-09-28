@@ -1,6 +1,6 @@
-import { CaptureAnnotator, type AnnotatorDeps } from './capture-annotator';
-import { el, fit, flipPosition, place } from './dom-base';
 import { STYLES } from './styles';
+import { el, fit, flipPosition, place } from './dom-base';
+import { CaptureAnnotator, type AnnotatorDeps } from './capture-annotator';
 import { copyToClipboard, download, shareFeedback } from '../download';
 import {
   exportBuilder,
@@ -18,7 +18,6 @@ import type { Comment, ReviewerStore } from '../types';
 export class Annotator extends CaptureAnnotator {
   constructor(deps: AnnotatorDeps) {
     super(deps, STYLES);
-    this.start();
     if (this._exportUiEnabled()) document.addEventListener('keydown', this._onExportHotkey, true);
   }
   override destroy(): void {
@@ -29,11 +28,11 @@ export class Annotator extends CaptureAnnotator {
   private _panelEl: HTMLDivElement | null = null;
   // Lives only while the export sheet is open; read once, on export.
   private _nameEl: HTMLInputElement | null = null;
-  // Anytime-export affordance: the count chip, whichever element anchors the
-  // open panel (control in toggle mode, chip for the export sheet), which KIND
-  // of panel is up (a sheet summon must replace a menu/confirmation, not just
-  // toggle it away — review #4), and the sheet's outside-dismiss teardown.
-  private _chipEl: HTMLButtonElement | null = null;
+  // Anytime-export affordance: whichever element anchors the open panel
+  // (control in toggle mode, chip for the export sheet), which KIND of panel
+  // is up (a sheet summon must replace a menu/confirmation, not just toggle it
+  // away — review #4), and the sheet's outside-dismiss teardown. The chip
+  // itself lives on the base class (_chipEl).
   private _panelAnchor: HTMLElement | null = null;
   // Status-line write generation — see _say().
   private _sayGen = 0;
@@ -878,9 +877,6 @@ export class Annotator extends CaptureAnnotator {
       const h = this._panelEl.querySelector('h3');
       if (h) h.textContent = this._sheetTitle();
     }
-  }
-  protected override _dismissExempt(): HTMLElement | null {
-    return this._chipEl;
   }
   protected override _composerExport(): HTMLButtonElement | null {
     if (!this._exportUiEnabled()) return null;

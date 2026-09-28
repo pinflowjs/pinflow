@@ -1,5 +1,5 @@
-import { Annotator } from './ui/annotator';
 import { initialize } from './runtime';
+import { Annotator } from './ui/annotator';
 import type { PinflowConfig } from './types';
 export { destroy, version } from './runtime';
 export { routeKey as routeOf } from './route-key';
@@ -51,19 +51,25 @@ export interface Handle {
   downloadExport(): void;
 }
 
+// SSR and declined-identity installs get an inert handle with the full API
+// (one shared noop: '' for the export getters, ignored for the void methods).
+const n = (): '' => '';
+
 export function init(config: PinflowConfig): Handle {
-  const handle = initialize(
+  return initialize<Annotator, Handle>(
     config,
-    (deps) => new Annotator(deps),
+    Annotator,
     (annotator) => ({
       exportJSON: () => annotator.exportJSON(),
       exportMarkdown: () => annotator.exportMarkdown(),
       downloadExport: () => annotator.downloadExport(),
     }),
-    { exportJSON: () => '', exportMarkdown: () => '', downloadExport() {} },
+    { destroy: n, refreshRoute: n, exportJSON: n, exportMarkdown: n, downloadExport: n },
   );
-  return handle;
 }
 
+// The full artifact toolkit is public: all four are DOM-free pure functions,
+// usable server-side (the sensavera hub renders collated exports from backend
+// rows with these — no widget, no DOM). Tree-shaken away for widget-only use.
 export { exportBuilder, exportFilename, exportJSON, exportReviewer } from './export';
 export type { DescribeRoute, ExportMeta, IsOrphaned } from './export';
