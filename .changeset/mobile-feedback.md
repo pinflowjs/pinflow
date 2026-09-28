@@ -4,4 +4,6 @@
 
 Keep the feedback editor and export panel inside the visible viewport as the mobile keyboard opens or pans the page. Tall editors scroll internally, including inside transformed native dialogs.
 
-Use native sharing on touch devices instead of automatic Markdown downloads. Share a Markdown file, a text attachment, or the full feedback text according to browser support. Preserve feedback on cancellation and offer clipboard and selectable-text recovery when browser APIs are blocked.
+Use native sharing on touch devices instead of automatic Markdown downloads. Share a Markdown file, a text attachment, or the full feedback text according to browser support. Canceling keeps the feedback, and the export sheet on touch devices describes sharing rather than a download.
+
+When the clipboard is blocked, on any device, **Copy to Clipboard** now shows the feedback in a selected text box for a manual copy — sandboxed preview frames block the clipboard on desktop too.

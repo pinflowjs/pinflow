@@ -295,7 +295,9 @@ with a mouse or trackpad. Available destinations depend on your browser and inst
 
 On desktop without touch input, the action downloads a Markdown file and copies the same
 content to the clipboard. The result is readable on its own and can be pasted into an issue,
-pull request, project document, or coding assistant. The explicit `downloadExport()` API
+pull request, project document, or coding assistant. If the page blocks the clipboard, as
+sandboxed preview frames often do, **Copy to Clipboard** shows the feedback in a selected text
+box so you can copy it yourself. The explicit `downloadExport()` API
 continues to download and copy on every device.
 
 The comment editor follows the visible viewport when the keyboard opens, closes, or pans
