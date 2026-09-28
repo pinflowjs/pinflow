@@ -9,9 +9,12 @@ src/
   core/               framework-agnostic engine — the only required code
     index.ts          public entry: init() singleton → Handle { destroy, refreshRoute }
     types.ts          public config + data types (PinflowConfig, Comment, Anchor, …)
-    ui/annotator.ts   the widget: pins, panels, editor popup (largest file in the repo)
+    runtime.ts        shared initialization and page-wide active lifecycle
+    ui/capture-annotator.ts  pins, editor, evidence, persistence and gestures
+    ui/annotator.ts   full controller subclass: export chip, panels and clear
     ui/styles.ts      hand-minified shadow-DOM CSS, --pf-* theme tokens
-    ui/dom.ts         shadow-root factory
+    ui/dom-base.ts    stylesheet-independent shadow-root factory and geometry
+    ui/dom.ts         full-style factory facade for internal callers
     ui/outline.ts     the scope outline: one container, N boxes, one idempotent remove()
     gesture/          stealth activation (Alt+click / long-press)
     storage.ts        schema-versioned localStorage persistence (v1→v2→v3→v4)
@@ -32,6 +35,8 @@ src/
     voice-contract.ts type-only port core exposes to voice (VoiceHost/VoiceSession)
     voice-loader.ts   the ONLY place voice is imported — dynamic import('pinflowjs/voice')
     iife.ts           CDN/script-tag auto-init shim
+  capture/            smaller reviewer entry; detached snapshot API
+  handoff/            optional frozen artifact adapter and delivery actions
   voice/              optional module: mic capture, Deepgram streaming, dot UI
   verification/       optional DOM-free revision-bound verification sidecars
   instrumentation/    optional Node-only development JSX/TSX source hints
@@ -41,9 +46,13 @@ src/
 
 Tests mirror this layout under `tests/` (see [testing.md](./testing.md)).
 
-## The one boundary that matters: core↔voice
+## Optional module boundaries
 
 Voice must cost text-only users **0 bytes**. `pinflowjs/voice` is marked external in every core build config (`tsup.config.ts`), so the dynamic import in `src/core/voice-loader.ts` stays a runtime reference and voice code never enters the core graph. The interface between the two sides is the type-only contract in `src/core/voice-contract.ts`. `tests/voice/bundle-isolation.test.ts` enforces this in CI. Full detail: [voice.md](./voice.md).
+
+The capture entry imports `CaptureAnnotator` and its capture stylesheet. The full entry imports the `Annotator` subclass, full styles and serializers. The base constructor prepares state; concrete controllers call `start()` only after their own fields initialize. A small set of protected hooks supplies panel cleanup/reflow, corpus UI updates, dismissal exemption and the composer's export action. Base and subclass are bundled together; their mangled properties never cross separately compiled entry boundaries. `pinflowjs/handoff` consumes only the stable `CaptureSnapshot` data contract.
+
+The runtime uses `Symbol.for('pinflow.active-instance')` on the page global for one active lifecycle across packed entries. Only the unprefixed public handle crosses this boundary. Destroy is idempotent and clears the slot only while it still owns it. No telemetry, runtime dependency, or new persisted schema is introduced.
 
 ## Data flow (happy path)
 

@@ -4,7 +4,9 @@ Everything a host can call, as it exists in code. Entry points, config options, 
 
 ## Package exports
 
-- **`pinflow`** (`src/core/index.ts` → `dist/index.js|cjs`) — core: `init()`, `destroy()`, `routeOf()`, `version`, exported types (incl. `PinflowTheme`), plus the artifact toolkit re-exports (`exportReviewer`, `exportBuilder`, `exportJSON`, `exportFilename` and the `DescribeRoute`/`ExportMeta`/`IsOrphaned` types) so hosts can render artifacts from their own data without an active instance.
+- **`pinflowjs`** (`src/core/index.ts` → `dist/index.js|cjs`) — core: `init()`, `destroy()`, `routeOf()`, `version`, exported types (incl. `PinflowTheme`), plus the artifact toolkit re-exports (`exportReviewer`, `exportBuilder`, `exportJSON`, `exportFilename` and the `DescribeRoute`/`ExportMeta`/`IsOrphaned` types) so hosts can render artifacts from their own data without an active instance.
+- **`pinflowjs/capture`** (`src/capture/index.ts`) — `init(CaptureConfig): CaptureHandle`, `destroy`, `routeOf`, `version`. Reviewer capture/editing without export UI or serializers. The handle has `destroy`, `refreshRoute`, and `getSnapshot(): CaptureSnapshot`.
+- **`pinflowjs/handoff`** (`src/handoff/index.ts`) — `prepareHandoff(snapshot, { describeRoute? })` returns a frozen `HandoffArtifact`: `markdown`, `json`, `filename`, `share()`, `copy()` and `download()`. It imports no annotation UI.
 - **`pinflowjs/voice`** (`src/voice/index.ts` → `dist/voice.js|cjs`) — voice module; lazy-loaded by core when `config.voice` is set. Never import it directly.
 - **`pinflowjs/react`** (`src/react/index.ts` → `dist/react.js|cjs`) — `<Annotator>` component.
 - **`pinflowjs/vue`** (`src/vue/index.ts` → `dist/vue.js|cjs`) — `<Annotator>` component (registered name `PinflowAnnotator`).
@@ -18,6 +20,12 @@ Everything a host can call, as it exists in code. Entry points, config options, 
 - **`destroy(): void`** — destroys the global singleton; no-op if none active.
 - **`routeOf(url: string): string`** — route key from a full URL: `pathname + search` with pinflow params (`?reviewer=`, `?mode=`) stripped.
 - **`version: string`** — compile-time `__PINFLOW_VERSION__` define (falls back to `'0.0.0'` under test).
+
+## Capture and optional handoff
+
+`CaptureConfig` omits `mode`, `onSubmit`, `exportUi`, and `describeRoute` from `PinflowConfig`; it always uses reviewer mode. `CaptureSnapshot` is `{ store: ReviewerStore, targets: Record<string, TargetResolution> }`. Snapshots reconcile durable state and deep-copy committed comments; unsaved drafts are excluded. Target diagnostics check the current route only. The adapter preserves the existing serializers and trust boundaries; it does not clear feedback. Share must be invoked from a user tap after preparation, returns `shared | cancelled | unavailable`, and does not prove delivery. Copy reports a boolean; download does not copy. See the [host integration example](../guide.md#smaller-capture-entry-for-custom-submission-interfaces).
+
+The active lifecycle is shared between independently packed full/capture entries through an unmangled public handle. Either entry's module-level `destroy()` disposes the active instance; a stale instance handle cannot dispose its replacement.
 
 ## `Handle`
 

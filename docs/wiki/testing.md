@@ -2,7 +2,7 @@
 
 Vitest (happy-dom) for units, Playwright for e2e. TDD-first per `CONTRIBUTING.md`: write the failing test before the implementation.
 
-## Coverage gate (`vitest.config.ts`, scoped to `src/core/**`)
+## Coverage gate (`vitest.config.ts`, scoped to `src/core/**`, `src/capture/**`, `src/handoff/**`)
 
 | Metric     | Threshold |
 | ---------- | --------- |
@@ -82,3 +82,5 @@ blocked APIs, manual copying and touch tablets with a fine primary pointer.
 viewport, plus tall forms and export panels across the three browser projects. `export-helper.ts`
 checks desktop downloads and captures mobile share payloads under real click activation. These
 checks do not drive a physical device's OS keyboard or share sheet; device validation remains separate.
+
+`capture-entry.test.ts` verifies editing without handoff UI, snapshot isolation, exact artifact parity with the full entry (including hostile text and unresolved targets), shared lifecycle, target-map prototype isolation and synchronous sharing of frozen content. `capture-bundle.test.ts` checks the runtime import graph and built outputs for forbidden handoff/voice code. The packed-consumer test compiles the new public contracts. `capture-entry.spec.ts` serves `/capture` and tests actual independently minified entries across all browser projects: deferred handoff requests, save/reload evidence, native-share activation/cancellation and full/capture replacement in both directions.

@@ -4,7 +4,7 @@ Three tsup entry groups build core, voice, and framework wrappers to ESM/CJS/IIF
 
 ## Build configs (`tsup.config.ts`)
 
-- **Core + separate optional entries** (`src/core/index.ts`, `src/voice/index.ts`, `src/verification/index.ts`, `src/instrumentation/index.ts`): ESM + CJS. Verification and development instrumentation are independent ESM/CJS exports, with no core import edge. Instrumentation receives TypeScript from its host and uses only Node built-ins at runtime. Core externalizes `pinflowjs/voice` so the lazy `import('pinflowjs/voice')` stays a runtime reference — voice never enters the core graph ("0 bytes for text users").
+- **Core + separate optional entries** (`src/core/index.ts`, `src/capture/index.ts`, `src/handoff/index.ts`, `src/voice/index.ts`, `src/verification/index.ts`, `src/instrumentation/index.ts`): ESM + CJS. Verification and development instrumentation are independent ESM/CJS exports, with no core import edge. Instrumentation receives TypeScript from its host and uses only Node built-ins at runtime. Core externalizes `pinflowjs/voice` so the lazy `import('pinflowjs/voice')` stays a runtime reference — voice never enters the core graph ("0 bytes for text users").
 - **IIFE** (`src/core/iife.ts` → `dist/pinflow.iife.js`): minified standalone bundle for CDN (unpkg/jsdelivr). Also externalizes `pinflowjs/voice`.
 
 **All three configs set `treeshake: true`.** The IIFE entry was the sole omission until 0.9.0, and it cost 191 B gz: because the voice specifier is an external DYNAMIC import, esbuild emits its `__require`/`__toESM` CJS-interop preamble unconditionally, and rollup's post-pass is what drops it. Use `true`, never `'smallest'` — that preset sets `propertyReadSideEffects: false`, which licenses rollup to delete the layout-forcing `.offsetHeight`/`.offsetWidth` reads in `annotator.ts` that exist to flush style. The change is invisible in raw bytes (raw fell 32 B while gz fell 296 B on the shipped artifact), so judge it on `pnpm size` only.
@@ -22,6 +22,8 @@ Three tsup entry groups build core, voice, and framework wrappers to ESM/CJS/IIF
 | core IIFE     | 30.81 KB    |
 | core ESM      | 30.68 KB    |
 | voice ESM     | 4.45 KB     |
+| capture ESM   | 25 KB       |
+| handoff ESM   | 7 KB        |
 | react wrapper | 0.51 KB     |
 | vue wrapper   | 0.69 KB     |
 
@@ -82,3 +84,5 @@ for entity/shadow constraints, modal handling, bounded capture facts and current
 resolution diagnostics. CI measured 30.76 kB IIFE and 30.63 kB ESM for this feature. Each core
 ceiling was ratcheted to its own CI result plus approximately 50 bytes.
 Voice and framework wrapper ceilings are unchanged.
+
+Capture and handoff are independent ESM/CJS entries with no runtime dependencies. Capture excludes handoff UI and serialization; handoff can be dynamically loaded by a host before enabling its Share button. Check their separate compressed sizes and the sum a host downloads after exporting; do not describe deferred bytes as removed bytes. The new-entry ceilings are provisional pending CI measurement and ratcheting. Existing full-entry ceilings remain unchanged: the pending mobile fixes plus the capture/handoff boundary exceed them locally, so publication requires an explicit owner-approved trade and the normal CI ratchet procedure.
