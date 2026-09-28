@@ -81,30 +81,28 @@ export function copyToClipboard(content: string): Promise<boolean> {
   return rec.p;
 }
 
-/** Native sharing must start synchronously in the caller's tap, before any await. */
+/**
+ * Hand the artifact to the OS share sheet. Call it synchronously from the tap:
+ * Web Share consumes the gesture's user activation at the first call, so any
+ * await before it would fail as `unavailable`.
+ */
 export async function shareFeedback(
   content: string,
   filename: string,
 ): Promise<'shared' | 'cancelled' | 'unavailable'> {
   try {
     if (!navigator.share) return 'unavailable';
-    let data: ShareData = { title: 'Pinflow feedback', text: content };
-    // Android may reject .md. A .txt attachment preserves every byte of Markdown.
-    for (const [name, type] of [
-      [filename, 'text/markdown'],
-      [filename.replace(/\.md$/, '.txt'), 'text/plain'],
-    ] as const) {
-      const files = [new File([content], name, { type })];
-      if (navigator.canShare?.({ files })) {
-        data = { title: 'Pinflow feedback', files };
-        break;
-      }
-    }
-    await navigator.share(data);
+    // Android may refuse a .md attachment; a .txt one carries the same bytes.
+    // With neither accepted, the Markdown goes as text.
+    const files = [filename, filename.replace(/\.md$/, '.txt')]
+      .map((name, i) => [new File([content], name, { type: i ? 'text/plain' : 'text/markdown' })])
+      .find((files) => navigator.canShare?.({ files }));
+    await navigator.share({
+      title: 'Pinflow feedback',
+      ...(files ? { files } : { text: content }),
+    });
     return 'shared';
   } catch (error) {
-    return error instanceof DOMException && error.name === 'AbortError'
-      ? 'cancelled'
-      : 'unavailable';
+    return (error as Error | undefined)?.name === 'AbortError' ? 'cancelled' : 'unavailable';
   }
 }

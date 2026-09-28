@@ -87,26 +87,21 @@ export function createRoot(
   // synchronous Handle contract intact.
   let destroyed = false;
   let confined: Bounds | null = null;
+  // What is actually on screen: the visual viewport (an open keyboard shrinks
+  // it, panning offsets it), clipped to the host dialog's box while confined.
   const bounds = (): Bounds => {
     const v = window.visualViewport;
-    const visible = v
-      ? { left: v.offsetLeft, top: v.offsetTop, width: v.width, height: v.height }
-      : { left: 0, top: 0, width: innerWidth, height: innerHeight };
-    if (!confined) return visible;
-    const left = Math.max(visible.left, confined.left);
-    const top = Math.max(visible.top, confined.top);
-    return {
-      left,
-      top,
-      width: Math.max(
-        0,
-        Math.min(visible.left + visible.width, confined.left + confined.width) - left,
-      ),
-      height: Math.max(
-        0,
-        Math.min(visible.top + visible.height, confined.top + confined.height) - top,
-      ),
-    };
+    let left = v ? v.offsetLeft : 0;
+    let top = v ? v.offsetTop : 0;
+    let right = left + (v ? v.width : innerWidth);
+    let bottom = top + (v ? v.height : innerHeight);
+    if (confined) {
+      left = Math.max(left, confined.left);
+      top = Math.max(top, confined.top);
+      right = Math.min(right, confined.left + confined.width);
+      bottom = Math.min(bottom, confined.top + confined.height);
+    }
+    return { left, top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
   };
   // Native modal descendants remain interactive; the rest of body is inert.
   const syncLayer = (): void => {
@@ -147,13 +142,11 @@ export function createRoot(
         height: modal.clientHeight,
       };
     }
-    root.style.cssText = confined
-      ? `transform:translate(${-dx}px,${-dy}px);width:${innerWidth}px;height:${innerHeight}px;`
-      : '';
     const b = bounds();
-    root.style.setProperty('--pf-ox', `${b.left}px`);
-    root.style.setProperty('--pf-oy', `${b.top}px`);
-    root.style.setProperty('--pf-oh', `${b.height}px`);
+    root.style.cssText =
+      (confined
+        ? `transform:translate(${-dx}px,${-dy}px);width:${innerWidth}px;height:${innerHeight}px;`
+        : '') + `--pf-ox:${b.left}px;--pf-oy:${b.top}px;--pf-oh:${b.height}px`;
   };
   if (document.body) {
     document.body.appendChild(host);
@@ -257,11 +250,16 @@ export function contrastFor(accent: string): string | null {
   return lum > 0.35 ? '#16181d' : '#fff';
 }
 
-/** Constrain chrome before measuring it; tall forms scroll within the visible area. */
+/**
+ * Constrain chrome to the visible area before measuring it; tall forms scroll
+ * inside. The stylesheet's width floor (240px composer, 260px panel) stands
+ * unless the visible area is narrower still, where it yields to the edge.
+ */
 export function fit(node: HTMLElement, bounds: Bounds): { width: number; height: number } {
   const width = Math.max(0, bounds.width - 16);
-  node.style.minWidth = `${Math.min(260, width)}px`;
-  node.style.maxWidth = `${Math.min(320, width)}px`;
-  node.style.maxHeight = `${Math.max(0, bounds.height - 16)}px`;
+  const s = node.style;
+  s.minWidth = width < 260 ? `${width}px` : '';
+  s.maxWidth = `${Math.min(320, width)}px`;
+  s.maxHeight = `${Math.max(0, bounds.height - 16)}px`;
   return { width: node.offsetWidth || 280, height: node.offsetHeight || 180 };
 }

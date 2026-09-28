@@ -13,7 +13,7 @@ function button(label: string): HTMLButtonElement | undefined {
     ...document.querySelector('[data-pinflow-root]')!.shadowRoot!.querySelectorAll('button'),
   ].find((b) => b.textContent === label);
 }
-function startExport() {
+function openSheet() {
   saveStore(localStorage, {
     ...emptyStore('mobile', 'Reviewer'),
     comments: [
@@ -44,6 +44,9 @@ function startExport() {
     .querySelector('[data-pinflow-root]')!
     .shadowRoot!.querySelector<HTMLButtonElement>('.chip')!
     .click();
+}
+function startExport() {
+  openSheet();
   button('Export & share')!.click();
 }
 
@@ -119,8 +122,9 @@ describe('mobile export controls', () => {
     await vi.waitFor(() => expect(button('Share feedback')!.disabled).toBe(false));
     const first = await nativeShare.mock.calls[0]![0].files[0].text();
     expect(JSON.parse(annotator!.exportJSON()).comments).toHaveLength(1);
+    // The reviewer just dismissed the sheet; the resting line still holds.
     expect(document.querySelector('[data-pinflow-root]')!.shadowRoot!.textContent).toContain(
-      'Sharing canceled',
+      'Share your feedback or copy it into a message.',
     );
     button('Share feedback')!.click();
     await vi.waitFor(() => expect(nativeShare).toHaveBeenCalledTimes(2));
@@ -133,6 +137,18 @@ describe('mobile export controls', () => {
     expect(button('Download Feedback Markdown')).toBeUndefined();
     expect(button('Copy to Clipboard')).toBeDefined();
     expect(URL.createObjectURL).not.toHaveBeenCalled();
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-pinflow-root]')!.shadowRoot!.textContent).toContain(
+        'Sharing is unavailable here. Copy the feedback instead.',
+      ),
+    );
+  });
+  it('the export sheet describes sharing, not a download, on touch', () => {
+    openSheet();
+    const body = document
+      .querySelector('[data-pinflow-root]')!
+      .shadowRoot!.querySelector('.panel p');
+    expect(body?.textContent).toBe('Opens your share sheet with the markdown.');
   });
 });
 

@@ -172,7 +172,9 @@ export class Annotator extends CaptureAnnotator {
     // The save can delete the sole (empty) comment — nothing left to export
     // means nothing to summon (review #8).
     if (this._store.comments.length === 0 || !this._chipEl?.isConnected) return;
-    const rest = 'Downloads the markdown and copies it to your clipboard.';
+    const rest = this._touch()
+      ? 'Opens your share sheet with the markdown.'
+      : 'Downloads the markdown and copies it to your clipboard.';
     // ONE export action. The sheet used to fork into "& share" / "& clear",
     // which asked for the disposal decision before either channel had run —
     // and download() cannot report failure, so the wipe could be authorised
@@ -470,10 +472,9 @@ export class Annotator extends CaptureAnnotator {
     const byId = new Map(this._store.comments.map((c) => [c.id, c.updatedAt]));
     for (const [id, ts] of this._foldConflicts)
       if (byId.get(id) !== ts) this._foldConflicts.delete(id);
-    if (window.matchMedia('(any-pointer:coarse)').matches) {
-      this._showConfirmation(false, [md, filename], rev, true);
-      return;
-    }
+    // Touch devices hand the file to the OS share sheet from the confirmation
+    // panel instead: a download there often no-ops or navigates away.
+    if (this._touch()) return this._showConfirmation(false, [md, filename], rev, true);
     download(md, filename);
     const startedFrom = this._panelEl;
     // Serialized page-wide inside copyToClipboard (0.11.0 review #10, #11).
@@ -485,74 +486,95 @@ export class Annotator extends CaptureAnnotator {
     this._showConfirmation(copied, [md, filename], rev);
   }
 
-  // Retries hold the frozen artifact and outlive revision-scoped clearing.
-  // Desktop tries download + clipboard; mobile opens the OS share sheet.
-  // A resolved native share is not proof that a recipient received the file.
+  // Coarse ANY pointer, so a touch tablet driven by a mouse still shares.
+  private _touch(): boolean {
+    return window.matchMedia('(any-pointer:coarse)').matches;
+  }
+
+  // Spec §5.6: after reviewer export, confirm rather than closing silently.
+  //
+  // On desktop both channels already fired once on the way here. They are ALSO
+  // offered as buttons, because one of them cannot be verified: download()
+  // fires a DETACHED a.click() and returns void — no event, no promise — and it
+  // no-ops outright in some in-app webviews. A button lets the reviewer retry
+  // the channel that failed, which is the difference between a dead end and a
+  // recovery. On touch the panel opens the share sheet itself, so a cancel or
+  // a refusal lands where Share and Copy can be retried. Only the clipboard
+  // result is ever asserted: it is the only one the widget can observe — a
+  // resolved share proves nothing about what the recipient got.
+  //
+  // That unverifiability is also why disposal lives here and not on the sheet:
+  // this is the first surface with any evidence about delivery, so it is the
+  // first place the reviewer can decide to discard the originals without
+  // guessing. The retries deliberately outlive the wipe.
   private _showConfirmation(
     copied: boolean,
-    artifact?: [md: string, filename: string],
-    rev?: ReadonlyMap<string, string>,
-    mobile = false,
+    [md, filename]: [md: string, filename: string],
+    rev: ReadonlyMap<string, string>,
+    touch = false,
   ): void {
     this._closePanel();
     // Delivery is mutable: a Copy retry that succeeds AFTER a failed export
     // write upgrades what the armed warning AND the resting line may honestly
     // claim (0.11.0 review #4).
     let delivered = copied;
+    let unshareable = false;
     // The resting body is also the disarm target: backing out of an armed
     // clear restores the truest line the panel can currently claim.
-    let shareStatus = 'Share your feedback or copy it into a message.';
-    const baseNow = (): string =>
-      mobile
-        ? delivered
-          ? 'Copied to your clipboard.'
-          : shareStatus
-        : delivered
+    const baseNow = (): string => {
+      if (!touch)
+        return delivered
           ? 'Copied to your clipboard. If no file downloaded, paste it instead.'
           : 'Check your downloads for the file.';
-    const send = this._makeButton(mobile ? 'Share feedback' : 'Download Feedback Markdown', () => {
-      const [md, filename] = artifact ?? this._buildArtifact();
-      if (!mobile) return download(md, filename);
-      if (send.disabled) return;
+      if (delivered) return 'Copied to your clipboard.';
+      return unshareable
+        ? 'Sharing is unavailable here. Copy the feedback instead.'
+        : 'Share your feedback or copy it into a message.';
+    };
+    // NOT downloadExport(): that also writes the clipboard, which would make
+    // this button silently clobber it behind the reviewer's back — the panel
+    // offers the two channels separately on purpose.
+    //
+    // Retries re-send the artifact that was ALREADY built. Rebuilding here
+    // would re-derive attribution from the stored identity, after the sheet
+    // and its name field are gone (review #5) — and, since 0.11.0, would
+    // rebuild from a store the Clear below may have just emptied. Holding
+    // the artifact is what lets both retries outlive the wipe.
+    const send = this._makeButton(touch ? 'Share feedback' : 'Download Feedback Markdown', () => {
+      if (!touch) return download(md, filename);
+      if (send.disabled) return; // one share sheet at a time
       send.disabled = true;
       const gen = ++this._sayGen;
-      // Invoke before any await: Web Share consumes the tap's user activation.
+      // Invoked before any await: Web Share consumes the tap's user activation.
+      // Shared and cancelled both leave the resting line standing — the
+      // reviewer just saw the sheet — so only a refusal is narrated.
       void shareFeedback(md, filename).then((result) => {
         send.disabled = false;
-        shareStatus =
-          result === 'shared'
-            ? 'Share sheet closed. You can share again or copy the feedback.'
-            : result === 'cancelled'
-              ? 'Sharing canceled. Your feedback is still here.'
-              : 'Sharing unavailable. Copy the feedback into a message instead.';
+        unshareable = result === 'unavailable';
         if (!this._destroyed && this._panelEl === panel && gen === this._sayGen)
-          this._say(shareStatus);
+          this._say(baseNow());
       });
     });
     const panel = this._makePanel('Your feedback is ready', baseNow(), [
-      // NOT downloadExport(): that also writes the clipboard, which would make
-      // this button silently clobber it behind the reviewer's back — the panel
-      // offers the two channels separately on purpose.
-      //
-      // Retries re-send the artifact that was ALREADY built. Rebuilding here
-      // would re-derive attribution from the stored identity, after the sheet
-      // and its name field are gone (review #5) — and, since 0.11.0, would
-      // rebuild from a store the Clear below may have just emptied. Holding
-      // the artifact is what lets both retries outlive the wipe.
       send,
       this._makeButton(
         'Copy to Clipboard',
         () =>
-          void this._reCopy(artifact?.[0], mobile).then((ok) => {
+          void this._reCopy(md).then((ok) => {
             if (ok) delivered = true;
           }),
       ),
     ]);
-    // Clearing remains separate from delivery; Done closes without deleting.
+    // Disposition, in its own row: quiet-left / affirmative-right, the comment
+    // popup's delete/save grammar. Neither retry takes the primary — the
+    // download already fired on the way here, and where it silently no-ops
+    // (in-app webviews) firing the same detached click again will not help;
+    // the body copy points at the clipboard instead. Finishing is the common
+    // path, so Done is what carries the accent.
     const row = el('div', 'row');
     const done = this._makeButton('Done', () => this._closePanel(), 'primary');
     row.appendChild(done);
-    if (rev?.size)
+    if (rev.size)
       this._attachClear({
         panel,
         row,
@@ -561,22 +583,22 @@ export class Annotator extends CaptureAnnotator {
         rest: baseNow,
         // Answers the only question a reviewer actually has here — which
         // depends on what this panel can honestly claim: with a verified
-        // clipboard the file is safe; without one, say so instead.
+        // clipboard the feedback is safe; without one, say so instead.
         warn: (n) =>
           `Deletes your ${n} from this browser. ` +
           (delivered
-            ? mobile
+            ? touch
               ? 'The clipboard copy is unaffected.'
               : 'The exported file is unaffected.'
-            : mobile
-              ? 'Check you received the feedback first: delivery is not confirmed.'
+            : touch
+              ? 'Make sure the feedback was sent first.'
               : 'Check the file downloaded first: there is no other copy.'),
       });
     panel.appendChild(row);
     this._panelEl = panel;
     this._ui.root.appendChild(panel);
     this._positionPanel();
-    if (mobile) send.click();
+    if (touch) send.click();
   }
 
   // The two-tap clear, shared by the export sheet and the confirmation.
@@ -830,30 +852,30 @@ export class Annotator extends CaptureAnnotator {
   // retries the latest wins; and anything said since (armed clear, wipe
   // report) outranks the narration entirely. Returns the clipboard result
   // either way — delivery and narration are separate facts (0.11.0 review #2).
-  private async _reCopy(md?: string, mobile = false): Promise<boolean> {
+  private async _reCopy(md: string): Promise<boolean> {
     const startedFrom = this._panelEl;
     const gen = ++this._sayGen;
-    const content = md ?? this._buildArtifact()[0];
-    const ok = await copyToClipboard(content);
-    if (!this._destroyed && this._panelEl === startedFrom && gen === this._sayGen) {
-      this._say(
-        ok ? 'Copied to your clipboard.' : 'Copy failed. Try again or use the other export option.',
-      );
-      if (!ok && mobile && startedFrom) {
-        let field = startedFrom.querySelector('textarea');
-        if (!field) {
-          field = el('textarea', 'manual-copy');
-          field.setAttribute('aria-label', 'Feedback to copy');
-          field.readOnly = true;
-          field.value = content;
-          startedFrom.appendChild(field);
-        }
-        this._say('Copy unavailable. Select and copy the feedback below.');
-        this._positionPanel();
-        field.focus({ preventScroll: true });
-        field.select();
-      }
+    const ok = await copyToClipboard(md);
+    if (this._destroyed || !startedFrom || this._panelEl !== startedFrom || gen !== this._sayGen)
+      return ok;
+    if (ok) {
+      this._say('Copied to your clipboard.');
+      return ok;
     }
+    // A blocked clipboard (in-app webview, sandboxed preview iframe, denied
+    // permission) must not be a dead end: hand over the text itself, selected,
+    // so the reviewer's own copy gesture still works.
+    let field = startedFrom.querySelector('textarea');
+    if (!field) {
+      field = el('textarea', 'manual-copy');
+      field.setAttribute('aria-label', 'Feedback to copy');
+      field.readOnly = true;
+      field.value = md;
+      startedFrom.appendChild(field);
+    }
+    this._say('Copy unavailable. Select and copy the feedback below.');
+    field.focus({ preventScroll: true });
+    field.select();
     return ok;
   }
 

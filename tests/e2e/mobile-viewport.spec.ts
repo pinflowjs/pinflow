@@ -175,9 +175,7 @@ test('the export name field and confirmation stay inside the keyboard viewport',
   if (await share.count()) {
     await share.click();
     await expect(
-      page.getByText('Share sheet closed. You can share again or copy the feedback.', {
-        exact: true,
-      }),
+      page.getByText('Share your feedback or copy it into a message.', { exact: true }),
     ).toBeVisible();
     await expectComposerInsideViewport(page, '[data-pinflow-root] .panel');
   }
