@@ -231,9 +231,20 @@ into the widget, and Pinflow styles do not leak into the host page.
 
 ## Export and share feedback
 
-The default export action does two things: it downloads a Markdown file and copies the same
+On touch devices, **Export & share** opens the native share sheet so you can choose an app,
+contact, or nearby device. Pinflow shares a Markdown file when supported, otherwise a text
+attachment with the same content, or the full text. Canceling keeps your feedback. If sharing
+is unavailable, use **Copy to Clipboard**; if copying is blocked too, a selectable text box
+lets you copy manually. No download starts automatically on touch devices, including tablets
+with a mouse or trackpad. Available destinations depend on your browser and installed apps.
+
+On desktop without touch input, the action downloads a Markdown file and copies the same
 content to the clipboard. The result is readable on its own and can be pasted into an issue,
-pull request, project document, or coding assistant.
+pull request, project document, or coding assistant. The explicit `downloadExport()` API
+continues to download and copy on every device.
+
+The comment editor follows the visible viewport when the keyboard opens, closes, or pans
+the page. When space is short, scroll inside the editor to reach its remaining fields and Save.
 
 Each comment includes the reviewer's words plus the information needed to find the target
 again:
@@ -309,12 +320,13 @@ existing `AGENTS.md`. See [`agent/README.md`](./agent/README.md).
 It added an **Email it to the builder** button that opened a prefilled `mailto:` draft. The
 recipient was the host's guess and Pinflow knows nothing about the reviewer beyond a display
 name, so the action handed someone a half-written email to finish themselves. The export
-confirmation now offers **Download** and **Copy to Clipboard** as buttons instead, which are the
-two things the widget can actually do.
+confirmation offers **Share feedback** on touch devices, **Download Feedback Markdown** on
+desktop, and **Copy to Clipboard** on both. Native sharing lets the reviewer choose the recipient.
 
 If you were using it, `onSubmit` below gives you a host-owned function to send the store
 wherever you like, and `onChange`/`source` sync to a backend. If you just wanted the file in
-someone's inbox, the reviewer already has it downloaded and on their clipboard.
+someone's inbox, the reviewer can choose email from the native share sheet, attach the downloaded
+file, or paste a clipboard copy.
 
 ### Submit through your own function
 

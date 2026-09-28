@@ -92,6 +92,8 @@ export const STYLES =
   '@media (prefers-reduced-motion:reduce){.pin{animation:none;transform:translate(-50%,-50%)}.chip{animation:none;transform:none}.hl{transition:none}.area{animation:none}.arm::before{transition:none}}' +
   '@media (max-width:640px){.pin,.arm{width:32px;height:32px;font-size:13px}.chip{min-width:32px;height:32px;font-size:13px}}' +
   '.input{position:fixed;pointer-events:auto;min-width:240px;max-width:320px;background:var(--pf-surface,light-dark(#fff,#1e222b));color:var(--pf-text,light-dark(#0f172a,#e7eaf1));border-radius:var(--pf-radius,10px);padding:10px;box-shadow:var(--pf-shadow,0 12px 32px rgba(15,23,42,.18),0 2px 6px rgba(15,23,42,.08))}' +
+  '.manual-copy{width:100%;height:100px;font-size:16px;-webkit-user-select:text;user-select:text}' +
+  '.input,.panel{overflow:auto;overscroll-behavior:contain}' +
   '.input textarea{-webkit-user-select:text;user-select:text;width:100%;min-height:64px;max-height:160px;resize:none;border:0;outline:0;background:transparent;color:inherit;font:inherit;font-size:13px;line-height:1.5}' +
   // iOS Safari auto-zooms the page when a focused input is under 16px; the
   // reviewer's recovery pinch then eats the draft. 16px on touch kills the

@@ -85,6 +85,27 @@ export function createUIRoot(strategy: StyleStrategy = resolveStyleStrategy()): 
   // synchronous Handle contract intact.
   let destroyed = false;
   let confined: Bounds | null = null;
+  const bounds = (): Bounds => {
+    const v = window.visualViewport;
+    const visible = v
+      ? { left: v.offsetLeft, top: v.offsetTop, width: v.width, height: v.height }
+      : { left: 0, top: 0, width: innerWidth, height: innerHeight };
+    if (!confined) return visible;
+    const left = Math.max(visible.left, confined.left);
+    const top = Math.max(visible.top, confined.top);
+    return {
+      left,
+      top,
+      width: Math.max(
+        0,
+        Math.min(visible.left + visible.width, confined.left + confined.width) - left,
+      ),
+      height: Math.max(
+        0,
+        Math.min(visible.top + visible.height, confined.top + confined.height) - top,
+      ),
+    };
+  };
   // Native modal descendants remain interactive; the rest of body is inert.
   const syncLayer = (): void => {
     if (destroyed || !document.body) return;
@@ -113,11 +134,24 @@ export function createUIRoot(strategy: StyleStrategy = resolveStyleStrategy()): 
     let dx = 0,
       dy = 0;
     if (modal) ({ left: dx, top: dy } = probe.getBoundingClientRect());
-    confined = dx || dy ? host.getBoundingClientRect() : null;
+    confined = null;
+    if (modal && (dx || dy)) {
+      const rect = modal.getBoundingClientRect();
+      // The dialog clips to its padding box, which does not move with its scroll contents.
+      confined = {
+        left: rect.left + modal.clientLeft,
+        top: rect.top + modal.clientTop,
+        width: modal.clientWidth,
+        height: modal.clientHeight,
+      };
+    }
     root.style.cssText = confined
-      ? `transform:translate(${-dx}px,${-dy}px);width:${innerWidth}px;height:${innerHeight}px;` +
-        `--pf-ox:${confined.left}px;--pf-oy:${confined.top}px;--pf-oh:${confined.height}px`
+      ? `transform:translate(${-dx}px,${-dy}px);width:${innerWidth}px;height:${innerHeight}px;`
       : '';
+    const b = bounds();
+    root.style.setProperty('--pf-ox', `${b.left}px`);
+    root.style.setProperty('--pf-oy', `${b.top}px`);
+    root.style.setProperty('--pf-oh', `${b.height}px`);
   };
   if (document.body) {
     document.body.appendChild(host);
@@ -135,7 +169,7 @@ export function createUIRoot(strategy: StyleStrategy = resolveStyleStrategy()): 
     shadow,
     root,
     syncLayer,
-    bounds: () => confined ?? { left: 0, top: 0, width: innerWidth, height: innerHeight },
+    bounds,
     destroy() {
       destroyed = true;
       host.remove();
@@ -201,8 +235,8 @@ export function flipPosition(
   if (top + size.height > oy + viewport.height - 8) {
     top = anchor.top - size.height - offset;
   }
-  if (left < ox + 8) left = ox + 8;
-  if (top < oy + 8) top = oy + 8;
+  left = Math.max(ox + 8, Math.min(left, ox + viewport.width - size.width - 8));
+  top = Math.max(oy + 8, Math.min(top, oy + viewport.height - size.height - 8));
   return { left, top };
 }
 
@@ -219,4 +253,13 @@ export function contrastFor(accent: string): string | null {
   }) as [number, number, number];
   const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
   return lum > 0.35 ? '#16181d' : '#fff';
+}
+
+/** Constrain chrome before measuring it; tall forms scroll within the visible area. */
+export function fit(node: HTMLElement, bounds: Bounds): { width: number; height: number } {
+  const width = Math.max(0, bounds.width - 16);
+  node.style.minWidth = `${Math.min(260, width)}px`;
+  node.style.maxWidth = `${Math.min(320, width)}px`;
+  node.style.maxHeight = `${Math.max(0, bounds.height - 16)}px`;
+  return { width: node.offsetWidth || 280, height: node.offsetHeight || 180 };
 }

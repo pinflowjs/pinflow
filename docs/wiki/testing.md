@@ -74,3 +74,11 @@ capture budget, degrade the owner to a hint and fail the test for a scheduling
 reason. Its transformed-modal and re-render tests cover the confined
 overlay; `anchor-actions.test.ts` covers the action roles a leaf click climbs to. `feedback-evidence.test.ts` also covers intent
 save/reopen/cancel/clear.
+
+`tests/core/mobile-share.test.ts` covers native sharing, attachment/text fallback, cancellation,
+blocked APIs, manual copying and touch tablets with a fine primary pointer.
+`tests/core/visual-viewport.test.ts` covers viewport bounds and off-screen anchor clamping.
+`tests/e2e/mobile-viewport.spec.ts` simulates keyboard resize/panning without resizing the layout
+viewport, plus tall forms and export panels across the three browser projects. `export-helper.ts`
+checks desktop downloads and captures mobile share payloads under real click activation. These
+checks do not drive a physical device's OS keyboard or share sheet; device validation remains separate.

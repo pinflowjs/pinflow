@@ -6,7 +6,7 @@ import { demoteScope, resolveScope } from '../scope';
 import type { ScopeRect } from '../scope';
 import { ScopeOutline } from './outline';
 import { buildSelectors, getTextFingerprint } from '../selector';
-import { copyToClipboard, download } from '../download';
+import { copyToClipboard, download, shareFeedback } from '../download';
 import {
   exportBuilder,
   exportFilename,
@@ -46,7 +46,7 @@ import { GestureController } from '../gesture/controller';
 import { acquireSelectionGuard } from './selection-guard';
 import type { Logger, VoiceHost, VoiceModule, VoiceSession } from '../voice-contract';
 import { loadVoice as defaultLoadVoice } from '../voice-loader';
-import { box, contrastFor, createUIRoot, el, flipPosition, place, type UIRoot } from './dom';
+import { box, contrastFor, createUIRoot, el, fit, flipPosition, place, type UIRoot } from './dom';
 
 // Not publicly configurable (P4.4). GestureController keeps its internal
 // option for tests.
@@ -294,6 +294,8 @@ export class Annotator {
     this._startGesture();
     this._hydrateFromSource();
     window.addEventListener('resize', this._onReflow);
+    window.visualViewport?.addEventListener('resize', this._onReflow);
+    window.visualViewport?.addEventListener('scroll', this._onReflow);
     // Capture phase: scroll events on nested overflow containers do NOT
     // bubble, but they DO capture through document — without this, pins over
     // inner scrollareas keep stale fixed coordinates (review #6).
@@ -423,6 +425,8 @@ export class Annotator {
   destroy(): void {
     this._generation += 1;
     window.removeEventListener('resize', this._onReflow);
+    window.visualViewport?.removeEventListener('resize', this._onReflow);
+    window.visualViewport?.removeEventListener('scroll', this._onReflow);
     document.removeEventListener('scroll', this._onReflow, { capture: true });
     this._mutations?.disconnect();
     this._mutations = null;
@@ -714,11 +718,8 @@ export class Annotator {
       ? this._panelAnchor
       : ((this._chipEl?.isConnected ? this._chipEl : null) ??
         (this._armEl?.isConnected ? this._armEl : null));
-    const size = {
-      width: this._panelEl.offsetWidth || 280,
-      height: this._panelEl.offsetHeight || 180,
-    };
     const vp = this._ui.bounds();
+    const size = fit(this._panelEl, vp);
     if (!anchor) {
       place(this._panelEl, {
         left: vp.left + 16,
@@ -2276,7 +2277,6 @@ export class Annotator {
       wrap.appendChild(actions);
     }
     this._positionInputNearPin(wrap, commentId);
-    ta.focus();
     this._activeInput = {
       wrap,
       commentId,
@@ -2284,6 +2284,7 @@ export class Annotator {
       cleanup: disarm,
       save: () => (frozen ? this._closeActiveInput() : save()),
     };
+    ta.focus({ preventScroll: true });
   }
 
   // Dismissal requires a COMPLETED outside tap: armed on pointerdown, fired
@@ -2348,15 +2349,12 @@ export class Annotator {
   private _positionInputNearPin(wrap: HTMLDivElement, commentId: string): void {
     const pin = this._pins.get(commentId);
     if (!pin) return;
+    // A native focus/scroll may have moved a containing dialog since the last frame.
+    this._ui.syncLayer();
     const pr = pin.getBoundingClientRect();
-    place(
-      wrap,
-      flipPosition(
-        { left: pr.right, top: pr.top },
-        { width: wrap.offsetWidth || 280, height: wrap.offsetHeight || 120 },
-        this._ui.bounds(),
-      ),
-    );
+    const vp = this._ui.bounds();
+    const size = fit(wrap, vp);
+    place(wrap, flipPosition({ left: pr.right, top: pr.top }, size, vp));
   }
 
   // Closing never saves — Save is explicit. A dismissed comment whose SAVED
@@ -2541,6 +2539,10 @@ export class Annotator {
     const byId = new Map(this._store.comments.map((c) => [c.id, c.updatedAt]));
     for (const [id, ts] of this._foldConflicts)
       if (byId.get(id) !== ts) this._foldConflicts.delete(id);
+    if (window.matchMedia('(any-pointer:coarse)').matches) {
+      this._showConfirmation(false, [md, filename], rev, true);
+      return;
+    }
     download(md, filename);
     const startedFrom = this._panelEl;
     // Serialized page-wide inside copyToClipboard (0.11.0 review #10, #11).
@@ -2552,25 +2554,14 @@ export class Annotator {
     this._showConfirmation(copied, [md, filename], rev);
   }
 
-  // Spec §5.6: after reviewer export, confirm rather than closing silently.
-  //
-  // Both channels already fired once on the way here. They are ALSO offered as
-  // buttons, because one of them cannot be verified: download() fires a
-  // DETACHED a.click() and returns void — no event, no promise — and it no-ops
-  // outright in some in-app webviews, exactly where a reviewer on a phone ends
-  // up. The old panel could only apologise for that in prose. A button lets the
-  // reviewer retry the channel that failed, which is the difference between a
-  // dead end and a recovery. Only the clipboard result is ever asserted, since
-  // it is the only one the widget can observe.
-  //
-  // That unverifiability is also why disposal lives here and not on the sheet:
-  // this is the first surface with any evidence about delivery, so it is the
-  // first place the reviewer can decide to discard the originals without
-  // guessing. The retries deliberately outlive the wipe.
+  // Retries hold the frozen artifact and outlive revision-scoped clearing.
+  // Desktop tries download + clipboard; mobile opens the OS share sheet.
+  // A resolved native share is not proof that a recipient received the file.
   private _showConfirmation(
     copied: boolean,
     artifact?: [md: string, filename: string],
     rev?: ReadonlyMap<string, string>,
+    mobile = false,
   ): void {
     this._closePanel();
     // Delivery is mutable: a Copy retry that succeeds AFTER a failed export
@@ -2579,10 +2570,34 @@ export class Annotator {
     let delivered = copied;
     // The resting body is also the disarm target: backing out of an armed
     // clear restores the truest line the panel can currently claim.
+    let shareStatus = 'Share your feedback or copy it into a message.';
     const baseNow = (): string =>
-      delivered
-        ? 'Copied to your clipboard. If no file downloaded, paste it instead.'
-        : 'Check your downloads for the file.';
+      mobile
+        ? delivered
+          ? 'Copied to your clipboard.'
+          : shareStatus
+        : delivered
+          ? 'Copied to your clipboard. If no file downloaded, paste it instead.'
+          : 'Check your downloads for the file.';
+    const send = this._makeButton(mobile ? 'Share feedback' : 'Download Feedback Markdown', () => {
+      const [md, filename] = artifact ?? this._buildArtifact();
+      if (!mobile) return download(md, filename);
+      if (send.disabled) return;
+      send.disabled = true;
+      const gen = ++this._sayGen;
+      // Invoke before any await: Web Share consumes the tap's user activation.
+      void shareFeedback(md, filename).then((result) => {
+        send.disabled = false;
+        shareStatus =
+          result === 'shared'
+            ? 'Share sheet closed. You can share again or copy the feedback.'
+            : result === 'cancelled'
+              ? 'Sharing canceled. Your feedback is still here.'
+              : 'Sharing unavailable. Copy the feedback into a message instead.';
+        if (!this._destroyed && this._panelEl === panel && gen === this._sayGen)
+          this._say(shareStatus);
+      });
+    });
     const panel = this._makePanel('Your feedback is ready', baseNow(), [
       // NOT downloadExport(): that also writes the clipboard, which would make
       // this button silently clobber it behind the reviewer's back — the panel
@@ -2593,24 +2608,16 @@ export class Annotator {
       // and its name field are gone (review #5) — and, since 0.11.0, would
       // rebuild from a store the Clear below may have just emptied. Holding
       // the artifact is what lets both retries outlive the wipe.
-      this._makeButton('Download Feedback Markdown', () => {
-        const [md, filename] = artifact ?? this._buildArtifact();
-        download(md, filename);
-      }),
+      send,
       this._makeButton(
         'Copy to Clipboard',
         () =>
-          void this._reCopy(artifact?.[0]).then((ok) => {
+          void this._reCopy(artifact?.[0], mobile).then((ok) => {
             if (ok) delivered = true;
           }),
       ),
     ]);
-    // Disposition, in its own row: quiet-left / affirmative-right, the comment
-    // popup's delete/save grammar. Neither retry takes the primary — the
-    // download already fired on the way here, and where it silently no-ops
-    // (in-app webviews) firing the same detached click again will not help;
-    // the body copy points at the clipboard instead. Finishing is the common
-    // path, so Done is what carries the accent.
+    // Clearing remains separate from delivery; Done closes without deleting.
     const row = el('div', 'row');
     const done = this._makeButton('Done', () => this._closePanel(), 'primary');
     row.appendChild(done);
@@ -2627,13 +2634,18 @@ export class Annotator {
         warn: (n) =>
           `Deletes your ${n} from this browser. ` +
           (delivered
-            ? 'The exported file is unaffected.'
-            : 'Check the file downloaded first: there is no other copy.'),
+            ? mobile
+              ? 'The clipboard copy is unaffected.'
+              : 'The exported file is unaffected.'
+            : mobile
+              ? 'Check you received the feedback first: delivery is not confirmed.'
+              : 'Check the file downloaded first: there is no other copy.'),
       });
     panel.appendChild(row);
     this._panelEl = panel;
     this._ui.root.appendChild(panel);
     this._positionPanel();
+    if (mobile) send.click();
   }
 
   // The two-tap clear, shared by the export sheet and the confirmation.
@@ -2833,7 +2845,7 @@ export class Annotator {
           disarm();
           return this._say('Some comments could not be cleared. Try again.');
         }
-        spend('Comments cleared. You can still download or copy the file.');
+        spend('Comments cleared. You can still export or copy the feedback.');
       },
       'clr',
     );
@@ -2878,6 +2890,7 @@ export class Annotator {
     this._sayGen++;
     const p = this._panelEl?.querySelector('p');
     if (p) p.textContent = text;
+    this._positionPanel();
   }
 
   // Reports only what it can verify, and only when nothing outranked it.
@@ -2886,12 +2899,30 @@ export class Annotator {
   // retries the latest wins; and anything said since (armed clear, wipe
   // report) outranks the narration entirely. Returns the clipboard result
   // either way — delivery and narration are separate facts (0.11.0 review #2).
-  private async _reCopy(md?: string): Promise<boolean> {
+  private async _reCopy(md?: string, mobile = false): Promise<boolean> {
     const startedFrom = this._panelEl;
     const gen = ++this._sayGen;
-    const ok = await copyToClipboard(md ?? this._buildArtifact()[0]);
-    if (!this._destroyed && this._panelEl === startedFrom && gen === this._sayGen)
-      this._say(ok ? 'Copied to your clipboard.' : 'Copy failed — use the download instead.');
+    const content = md ?? this._buildArtifact()[0];
+    const ok = await copyToClipboard(content);
+    if (!this._destroyed && this._panelEl === startedFrom && gen === this._sayGen) {
+      this._say(
+        ok ? 'Copied to your clipboard.' : 'Copy failed. Try again or use the other export option.',
+      );
+      if (!ok && mobile && startedFrom) {
+        let field = startedFrom.querySelector('textarea');
+        if (!field) {
+          field = el('textarea', 'manual-copy');
+          field.setAttribute('aria-label', 'Feedback to copy');
+          field.readOnly = true;
+          field.value = content;
+          startedFrom.appendChild(field);
+        }
+        this._say('Copy unavailable. Select and copy the feedback below.');
+        this._positionPanel();
+        field.focus({ preventScroll: true });
+        field.select();
+      }
+    }
     return ok;
   }
 

@@ -612,7 +612,7 @@ describe('Annotator submission moment (L1.6)', () => {
     findButton('Copy to Clipboard')!.click();
     await flushMicrotasks();
     expect(shadow().querySelector('.panel p')?.textContent).toBe(
-      'Copy failed — use the download instead.',
+      'Copy failed. Try again or use the other export option.',
     );
   });
 

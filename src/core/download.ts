@@ -80,3 +80,31 @@ export function copyToClipboard(content: string): Promise<boolean> {
   inFlight = rec;
   return rec.p;
 }
+
+/** Native sharing must start synchronously in the caller's tap, before any await. */
+export async function shareFeedback(
+  content: string,
+  filename: string,
+): Promise<'shared' | 'cancelled' | 'unavailable'> {
+  try {
+    if (!navigator.share) return 'unavailable';
+    let data: ShareData = { title: 'Pinflow feedback', text: content };
+    // Android may reject .md. A .txt attachment preserves every byte of Markdown.
+    for (const [name, type] of [
+      [filename, 'text/markdown'],
+      [filename.replace(/\.md$/, '.txt'), 'text/plain'],
+    ] as const) {
+      const files = [new File([content], name, { type })];
+      if (navigator.canShare?.({ files })) {
+        data = { title: 'Pinflow feedback', files };
+        break;
+      }
+    }
+    await navigator.share(data);
+    return 'shared';
+  } catch (error) {
+    return error instanceof DOMException && error.name === 'AbortError'
+      ? 'cancelled'
+      : 'unavailable';
+  }
+}

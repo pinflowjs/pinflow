@@ -67,6 +67,8 @@ test('the export copy succeeds under the click gesture', async ({ page }, testIn
   await page.locator(SAVE_BUTTON).click();
   await page.locator(CHIP).click();
   await page.locator(EXPORT_BTN).click();
+  if (await page.evaluate(() => matchMedia('(any-pointer:coarse)').matches))
+    await page.getByRole('button', { name: 'Copy to Clipboard', exact: true }).click();
   await expect(page.locator('text=Copied to your clipboard')).toBeVisible();
 });
 

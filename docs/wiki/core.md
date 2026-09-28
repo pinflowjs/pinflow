@@ -253,7 +253,14 @@ block for the overlay's fixed boxes; a zero-size probe measures that offset and
 `root` is translated back onto the viewport so pins land on page geometry. The
 dialog's UA `overflow:auto` still clips to its box, so `bounds()` (and the
 `--pf-ox/oy/oh` variables the dock reads) confine the dock, composer and export
-panel to that box while it is open. Composer Escape consumes native cancellation. The mutation observer also
+panel to the intersection of the dialog's padding box and the visual viewport. The padding
+box is measured from the dialog itself so scrolling its contents does not move the clipping bounds.
+`bounds()` uses `visualViewport` dimensions and offsets, falling back to the layout viewport.
+Visual viewport resize/scroll events schedule the same rAF reflow and are removed on destroy.
+`fit()` constrains composer/panel dimensions before measurement; overflow scrolls internally.
+`flipPosition()` clamps both edges even when a pin is outside the visible viewport. The composer
+synchronizes its layer before measuring and focuses with `preventScroll`. Status writes also
+reposition the export panel after text wrapping changes its height. Composer Escape consumes native cancellation. The mutation observer also
 observes the open shadow roots of resolved targets, and caches recheck owner
 agreement before reuse. All selector repair paths call `_persistHeal`.
 
@@ -265,3 +272,17 @@ Handle exports report current target diagnostics only on the active route; other
 routes are `not-checked`. JSON keeps them in top-level `targetResolution`, outside
 persisted comments and revision hashes. DOM-free toolkit callers can supply a
 resolver; without one Markdown says `not-checked` and JSON omits diagnostics.
+
+### Mobile export delivery
+
+`_handleReviewerExport()` uses `any-pointer:coarse` for touch devices (including tablets with
+a fine primary pointer). It freezes the artifact/revision batch and opens the confirmation
+synchronously, invoking `shareFeedback()` before leaving the tap activation. There is no automatic
+download or clipboard write on this path. `download.ts` probes Markdown-file support, then a
+plain-text attachment, then sends the complete text through `navigator.share`. Cancellation and
+unsupported/blocked sharing keep the comments and offer retry/copy. `_reCopy()` exposes a selectable
+read-only artifact if mobile clipboard access fails. Retries retain the original artifact after
+clearing; pending share disables duplicate activation, and panel/generation checks suppress late
+status writes. Sharing never claims recipient delivery; destructive warnings name the clipboard
+copy only after a successful write. Desktop export and the explicit `downloadExport()` API retain
+the download-and-copy contract.
