@@ -1,5 +1,5 @@
 import type { ScopeRect, ScopeResult } from '../scope';
-import { box, el } from './dom';
+import { box, el } from './dom-base';
 
 // The scope outline: what the reviewer sees resolved, before the composer
 // opens. Four orthogonal channels, one meaning each, composable — which is how
