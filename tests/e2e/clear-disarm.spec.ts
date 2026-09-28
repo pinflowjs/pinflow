@@ -72,6 +72,23 @@ test('the export copy succeeds under the click gesture', async ({ page }, testIn
   await expect(page.locator('text=Copied to your clipboard')).toBeVisible();
 });
 
+// The handoff stylesheet block now precedes the overlay block that carries
+// `.panel .clr:hover`; the armed fill must still win, or hovering the armed
+// control paints danger-red text on a danger-red fill.
+test('the armed clear keeps its fill and legible text under hover', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'hover is a fine-pointer state');
+  await page.goto('/?reviewer=ArmedHover');
+  await armClear(page);
+  const armed = page.locator('button:has-text("Clear 1 comment")');
+  await armed.hover();
+  const { background, color } = await armed.evaluate((b) => {
+    const s = getComputedStyle(b);
+    return { background: s.backgroundColor, color: s.color };
+  });
+  expect(background).toBe('rgb(220, 38, 38)');
+  expect(color).toBe('rgb(255, 255, 255)');
+});
+
 test('the comment survives the backed-out arm', async ({ page }) => {
   await page.goto('/?reviewer=Disarmer2');
   await armClear(page);

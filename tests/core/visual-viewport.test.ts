@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { createUIRoot, flipPosition } from '../../src/core/ui/dom';
+import { createUIRoot, fit, flipPosition } from '../../src/core/ui/dom';
 afterEach(() => {
   document.body.innerHTML = '';
   vi.unstubAllGlobals();
@@ -18,4 +18,15 @@ it('clamps a panel even when its anchor is beyond the visible viewport', () => {
       { left: 0, top: 180, width: 390, height: 300 },
     ),
   ).toEqual({ left: 102, top: 252 });
+});
+it('keeps the stylesheet width floor unless the visible area is narrower', () => {
+  const node = document.createElement('div');
+  fit(node, { left: 0, top: 0, width: 390, height: 844 });
+  // The composer's 240px and the panel's 260px floors both stand.
+  expect(node.style.minWidth).toBe('');
+  expect(node.style.maxWidth).toBe('320px');
+  expect(node.style.maxHeight).toBe('828px');
+  fit(node, { left: 0, top: 0, width: 200, height: 300 });
+  expect(node.style.minWidth).toBe('184px');
+  expect(node.style.maxWidth).toBe('184px');
 });
