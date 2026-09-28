@@ -25,6 +25,61 @@ Local storage also defines the limits of that setup:
 Use [backend sync](#connect-your-own-backend) when feedback must follow a reviewer across
 devices, appear in a team workspace, or survive cleared browser data.
 
+## Smaller capture entry for custom submission interfaces
+
+Use `pinflowjs/capture` when your app owns the submission interface. It includes pinning,
+editing, local persistence, backend sync, optional voice, target evidence and scope capture.
+It omits the export chip, export sheet, bulk clear controls and artifact serializers.
+The regular `pinflowjs` entry and framework wrappers continue to include the full widget.
+
+```ts
+import { init } from 'pinflowjs/capture';
+
+const capture = init({
+  project: 'my-prototype',
+  expectedOutcome: true,
+});
+
+// When opening YOUR submission panel, after the reviewer saves their draft:
+const { prepareHandoff } = await import('pinflowjs/handoff');
+const artifact = prepareHandoff(capture.getSnapshot());
+
+// Enable your Share button only after preparation completes.
+shareButton.onclick = () => {
+  void artifact.share().then((result) => {
+    if (result === 'unavailable') {
+      // Offer a Copy button or selectable artifact.markdown in your interface.
+    }
+    // Cancellation or a closed share sheet never authorizes deleting comments.
+  });
+};
+copyButton.onclick = () => void artifact.copy();
+downloadButton.onclick = () => artifact.download();
+```
+
+`getSnapshot()` returns `{ store, targets }`, detached from live state. It reads committed
+comments, reconciles durable changes and checks current-route targets. Unsaved text in an
+open editor is excluded. Other routes report `not-checked`; unavailable targets retain their
+historical evidence. Editing a returned snapshot does not alter stored comments.
+
+`prepareHandoff(snapshot, { describeRoute? })` freezes `markdown`, `json` and `filename`.
+Its actions keep sending that artifact if feedback changes later; prepare again to include
+new edits. `share()` returns `shared`, `cancelled` or `unavailable`; `copy()` returns a boolean;
+`download()` starts a file download without copying. Sharing uses the platform's native sheet
+on supported iOS/Android browsers, with attachment/text fallback. A successful share promise
+is not confirmation of recipient delivery. Keep comments until the reviewer explicitly removes them.
+
+Prepare before the final tap: awaiting a dynamic import inside the Share click handler can
+lose the browser's required user activation. Lazy loading reduces initial transfer; users who
+export also fetch the handoff entry. Capturing alone never imports it.
+
+`CaptureConfig` omits `mode`, `onSubmit`, `exportUi` and `describeRoute`. Capture always runs
+in reviewer mode; use the full entry for builder aggregation. Use `onChange`/`source` normally
+for backend sync, and pass `describeRoute` to `prepareHandoff` if needed. The capture handle
+has `destroy()`, `refreshRoute()` and `getSnapshot()`; it does not expose the full handle's
+export methods. Both entries share the active page instance, so initializing either replaces
+and disposes the other. Calling an old handle's `destroy()` cannot destroy its replacement.
+
 ## Frameworks
 
 Install the package when your app uses a bundler:

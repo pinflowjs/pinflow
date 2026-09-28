@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Capture entry fixture</title>
+    <style>
+      body {
+        font: 16px system-ui;
+        margin: 24px;
+      }
+      button {
+        font: inherit;
+        padding: 12px;
+        margin: 4px;
+      }
+      main {
+        padding: 24px 0;
+      }
+      textarea {
+        width: 100%;
+        height: 120px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Checkout prototype</h1>
+    <main>
+      <section data-testid="checkout-section">
+        <h2>Checkout</h2>
+        <button id="checkout">Pay now</button>
+      </section>
+    </main>
+    <nav aria-label="Fixture controls">
+      <button id="capture">Use capture</button><button id="full">Use full</button>
+      <button id="prepare">Prepare feedback</button
+      ><button id="share" disabled>Share feedback</button>
+    </nav>
+    <p id="status" role="status">Loading capture</p>
+    <textarea id="artifact" aria-label="Prepared feedback" readonly></textarea>
+    <script type="module">
+      import { init } from '/dist/capture.js';
+      const config = { project: 'capture-e2e', reviewer: 'Reviewer', expectedOutcome: true };
+      window.previous = [];
+      function capture() {
+        if (window.captureHandle) window.previous.push(window.captureHandle);
+        if (window.fullHandle) window.previous.push(window.fullHandle);
+        window.captureHandle = init(config);
+        document.getElementById('status').textContent = 'Capture ready';
+      }
+      capture();
+      document.getElementById('capture').onclick = capture;
+      document.getElementById('full').onclick = async () => {
+        window.previous.push(window.captureHandle);
+        const module = await import('/dist/index.js');
+        window.fullHandle = module.init(config);
+        document.getElementById('status').textContent = 'Full ready';
+      };
+      document.getElementById('prepare').onclick = async () => {
+        document.getElementById('share').disabled = true;
+        try {
+          const { prepareHandoff } = await import('/dist/handoff.js');
+          window.artifact = prepareHandoff(window.captureHandle.getSnapshot());
+          document.getElementById('artifact').value = window.artifact.markdown;
+          document.getElementById('share').disabled = false;
+          document.getElementById('status').textContent = 'Feedback ready';
+        } catch {
+          document.getElementById('status').textContent = 'Could not prepare feedback. Try again.';
+        }
+      };
+      document.getElementById('share').onclick = () => {
+        // Preparation already completed; the native API starts inside this tap.
+        window.artifact.share().then((result) => {
+          document.getElementById('status').textContent = result;
+        });
+      };
+    </script>
+  </body>
+</html>

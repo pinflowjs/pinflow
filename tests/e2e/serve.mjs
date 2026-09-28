@@ -26,6 +26,8 @@ const server = createServer(async (req, res) => {
 
   if (url.pathname.startsWith('/dist/')) {
     filePath = join(ROOT, url.pathname);
+  } else if (url.pathname === '/capture') {
+    filePath = join(FIXTURE, 'capture.html');
   } else if (url.pathname === '/csp') {
     filePath = join(FIXTURE, 'csp.html');
     headers['Content-Security-Policy'] = STRICT_CSP;
