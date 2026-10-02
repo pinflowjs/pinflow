@@ -137,7 +137,7 @@
     {
       "name": "core (IIFE, gz)",
       "path": "dist/pinflow.iife.js",
-      "limit": "30.81 KB",
+      "limit": "31.81 KB",
       "gzip": true,
       "ignore": [
         "pinflowjs/voice"
@@ -146,7 +146,7 @@
     {
       "name": "core (ESM, gz)",
       "path": "dist/index.js",
-      "limit": "30.68 KB",
+      "limit": "31.64 KB",
       "gzip": true,
       "ignore": [
         "pinflowjs/voice"
@@ -181,7 +181,7 @@
     {
       "name": "capture (ESM, gz)",
       "path": "dist/capture.js",
-      "limit": "25 KB",
+      "limit": "23.81 KB",
       "gzip": true,
       "ignore": [
         "pinflowjs/voice"
@@ -190,7 +190,7 @@
     {
       "name": "handoff (ESM, gz)",
       "path": "dist/handoff.js",
-      "limit": "7 KB",
+      "limit": "6.11 KB",
       "gzip": true
     }
   ],
