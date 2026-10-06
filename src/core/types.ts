@@ -483,3 +483,12 @@ export interface TargetResolution {
   rung?: 'testid' | 'id' | 'name' | 'css' | 'xpath' | 'text' | 'fuzzy' | 'positional';
   owner?: 'agrees' | 'unresolved' | 'not-recorded';
 }
+
+/** Committed feedback and current target checks, detached from the live controller. */
+export interface CaptureSnapshot {
+  store: ReviewerStore;
+  targets: Record<string, TargetResolution>;
+}
+
+/** Hosts using capture own submission; handoff UI and builder aggregation are absent. */
+export type CaptureConfig = Omit<PinflowConfig, 'mode' | 'onSubmit' | 'exportUi' | 'describeRoute'>;

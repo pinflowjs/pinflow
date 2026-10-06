@@ -80,3 +80,29 @@ export function copyToClipboard(content: string): Promise<boolean> {
   inFlight = rec;
   return rec.p;
 }
+
+/**
+ * Hand the artifact to the OS share sheet. Call it synchronously from the tap:
+ * Web Share consumes the gesture's user activation at the first call, so any
+ * await before it would fail as `unavailable`.
+ */
+export async function shareFeedback(
+  content: string,
+  filename: string,
+): Promise<'shared' | 'cancelled' | 'unavailable'> {
+  try {
+    if (!navigator.share) return 'unavailable';
+    // Android may refuse a .md attachment; a .txt one carries the same bytes.
+    // With neither accepted, the Markdown goes as text.
+    const files = [filename, filename.replace(/\.md$/, '.txt')]
+      .map((name, i) => [new File([content], name, { type: i ? 'text/plain' : 'text/markdown' })])
+      .find((files) => navigator.canShare?.({ files }));
+    await navigator.share({
+      title: 'Pinflow feedback',
+      ...(files ? { files } : { text: content }),
+    });
+    return 'shared';
+  } catch (error) {
+    return (error as Error | undefined)?.name === 'AbortError' ? 'cancelled' : 'unavailable';
+  }
+}

@@ -7,7 +7,14 @@
 // GOTCHA: --pf-font-family is consumed on .root, NOT :host — Chrome drops a
 // var()-dependent longhand that shares a block with `all:initial` (found via
 // the sensavera browser proof), so the :host rule keeps only the static stack.
-export const STYLES =
+//
+// Three blocks, so capture can omit the handoff chrome (export sheet, count
+// chip, confirmation) while the full widget pays for two concatenations, not
+// one per section. Where the handoff block sits is load-bearing: `.chip` must
+// follow the shared `.arm,.chip` rule and precede the reduced-motion and
+// small-screen overrides below it, and the `.panel button` box must precede
+// the coarse-pointer rule that raises it to 44px.
+const dock =
   ':host{all:initial;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}' +
   '*{box-sizing:border-box}' +
   // The var fallback repeats the static stack (not `inherit`) so .root never
@@ -21,8 +28,9 @@ export const STYLES =
   // in neutral chrome; the count chip joins it when there is something to
   // export. Children carry pointer-events — the dock itself stays inert.
   // .arm/.chip share the circle; each keeps only its color/size deltas.
-  // The --pf-o* variables are set only while the overlay is confined to a host
-  // dialog's box (dom.ts syncLayer); unset, both resolve to the viewport corner.
+  // The --pf-o* variables carry the visible area (dom-base.ts syncLayer): the
+  // visual viewport, clipped to a host dialog's box while confined there. The
+  // fallbacks cover the frame before the first sync.
   '.dock{position:fixed;left:calc(var(--pf-ox,0px) + 16px);bottom:calc(100% - var(--pf-oy,0px) - var(--pf-oh,100%) + 16px);display:flex;align-items:center;gap:8px}' +
   '.arm,.chip{pointer-events:auto;height:26px;border:0;padding:0;border-radius:999px;font:inherit;font-weight:600;box-shadow:0 4px 10px rgba(0,0,0,.28),0 0 0 2px var(--pf-surface,light-dark(#fff,#1e222b));cursor:pointer;display:grid;place-items:center}' +
   '.arm{width:26px;background:#0f172a;color:#f8fafc}' +
@@ -32,7 +40,9 @@ export const STYLES =
   // bars 45° — the + literally becomes the × (ease-out-quart, motion-safe).
   '.arm::before{content:"";width:12px;height:12px;background:linear-gradient(currentColor 0 0) center/12px 2px no-repeat,linear-gradient(currentColor 0 0) center/2px 12px no-repeat;transition:transform .18s cubic-bezier(.165,.84,.44,1)}' +
   '.arm[data-active="true"]::before{transform:rotate(45deg)}' +
-  '.arm[data-active="true"]{background:var(--pf-accent,#2563eb);color:var(--pf-accent-contrast,#fff)}' +
+  '.arm[data-active="true"]{background:var(--pf-accent,#2563eb);color:var(--pf-accent-contrast,#fff)}';
+
+const handoff =
   '.panel{position:fixed;pointer-events:auto;min-width:260px;max-width:320px;background:var(--pf-surface,light-dark(#fff,#1e222b));color:var(--pf-text,light-dark(#0f172a,#e7eaf1));border-radius:var(--pf-radius,12px);padding:16px;box-shadow:var(--pf-shadow,0 16px 48px rgba(15,23,42,.18),0 2px 6px rgba(15,23,42,.08));font-size:13px;line-height:1.45}' +
   '.panel h3{margin:0 0 8px;font-size:13px;font-weight:600}' +
   '.panel p{margin:0 0 12px;opacity:.75;color:var(--pf-text-muted,inherit)}' +
@@ -49,6 +59,18 @@ export const STYLES =
   '.panel input.name{-webkit-user-select:text;user-select:text;box-sizing:border-box;width:100%;margin:0 0 10px;cursor:text}' +
   '.panel button.primary{background:var(--pf-accent,#2563eb);color:var(--pf-accent-contrast,#fff);border-color:transparent}' +
   '.panel button:hover{filter:brightness(.97)}' +
+  // Anytime-export count chip: the pin vocabulary (same accent circle, same
+  // pop-in), docked beside the arm segment.
+  '.chip{min-width:26px;padding:0 8px;background:var(--pf-accent,#2563eb);color:var(--pf-accent-contrast,#fff);font-size:12px;transform:scale(0);animation:chippop .18s ease forwards}' +
+  '@keyframes chippop{to{transform:scale(1)}}' +
+  '.manual-copy{width:100%;height:100px;font-size:16px;-webkit-user-select:text;user-select:text}' +
+  '.panel .row+.row{margin-top:8px}' +
+  // Armed, the clear is the row's destructive affirmative: a filled button
+  // beside Keep, in the primary's place. `.root` outranks the overlay block's
+  // `.panel .clr:hover`, which comes later in the sheet.
+  '.root .panel .clr.a{background:var(--pf-danger,light-dark(#dc2626,#f87171));color:light-dark(#fff,#0f172a);border-color:transparent}';
+
+const overlay =
   '.pin{position:fixed;pointer-events:auto;width:24px;height:24px;border:0;padding:0;font-family:inherit;border-radius:999px;background:var(--pf-accent,#2563eb);color:var(--pf-accent-contrast,#fff);display:grid;place-items:center;font-size:11px;font-weight:600;box-shadow:0 4px 10px rgba(0,0,0,.28),0 0 0 2px var(--pf-surface,light-dark(#fff,#1e222b));cursor:pointer;transform:translate(-50%,-50%) scale(0);animation:pop .18s ease forwards;transition:transform .12s ease}' +
   '.pin:hover{transform:translate(-50%,-50%) scale(1.08)}' +
   // Resolution treatment (L2.3), cheapest legible option: dispositioned pins go
@@ -85,13 +107,10 @@ export const STYLES =
   // box-shadow spread instead of an overlay element. Must track the pointer
   // with zero lag, so the hover transition is dropped while dragging.
   '.hl[data-marquee]{box-shadow:0 0 0 200vmax rgba(15,23,42,.32);transition:none}' +
-  // Anytime-export count chip: the pin vocabulary (same accent circle, same
-  // pop-in), docked beside the arm segment.
-  '.chip{min-width:26px;padding:0 8px;background:var(--pf-accent,#2563eb);color:var(--pf-accent-contrast,#fff);font-size:12px;transform:scale(0);animation:chippop .18s ease forwards}' +
-  '@keyframes chippop{to{transform:scale(1)}}' +
   '@media (prefers-reduced-motion:reduce){.pin{animation:none;transform:translate(-50%,-50%)}.chip{animation:none;transform:none}.hl{transition:none}.area{animation:none}.arm::before{transition:none}}' +
   '@media (max-width:640px){.pin,.arm{width:32px;height:32px;font-size:13px}.chip{min-width:32px;height:32px;font-size:13px}}' +
   '.input{position:fixed;pointer-events:auto;min-width:240px;max-width:320px;background:var(--pf-surface,light-dark(#fff,#1e222b));color:var(--pf-text,light-dark(#0f172a,#e7eaf1));border-radius:var(--pf-radius,10px);padding:10px;box-shadow:var(--pf-shadow,0 12px 32px rgba(15,23,42,.18),0 2px 6px rgba(15,23,42,.08))}' +
+  '.input,.panel{overflow:auto;overscroll-behavior:contain}' +
   '.input textarea{-webkit-user-select:text;user-select:text;width:100%;min-height:64px;max-height:160px;resize:none;border:0;outline:0;background:transparent;color:inherit;font:inherit;font-size:13px;line-height:1.5}' +
   // iOS Safari auto-zooms the page when a focused input is under 16px; the
   // reviewer's recovery pinch then eats the draft. 16px on touch kills the
@@ -106,7 +125,6 @@ export const STYLES =
   // .62, not .55: the quiet state must still clear AA 4.5:1 at 13px on both
   // light-dark surfaces (0.11.0 review #1 measured .55 at ~4.0:1 on light).
   '.input .delete,.input .exportall{background:transparent;border:0;color:inherit;cursor:pointer;opacity:.62;font:inherit;padding:0}' +
-  '.panel .row+.row{margin-top:8px}' +
   // The panel's clear is a REAL button at rest — the shared `.panel button`
   // box beside Export & share / Done. As quiet caption text it was not read as
   // an action at all (0.12.1). Hover tints it toward danger; the border is
@@ -114,18 +132,9 @@ export const STYLES =
   // Dark fallback lightens: #dc2626 is 4.8:1 on the light surface but 3.3:1
   // on the dark one, and the armed clear is a standing state, not a flash.
   '.input .delete:hover,.panel .clr:hover{opacity:1;color:var(--pf-danger,light-dark(#dc2626,#f87171))}' +
-  // Armed, the clear is the row's destructive affirmative: a filled button
-  // beside Keep, in the primary's place.
-  '.panel .clr.a{background:var(--pf-danger,light-dark(#dc2626,#f87171));color:light-dark(#fff,#0f172a);border-color:transparent}' +
   '.input .exportall:hover{opacity:1}' +
   '.input .save{background:var(--pf-accent,#2563eb);color:var(--pf-accent-contrast,#fff);border:0;border-radius:8px;padding:6px 16px;min-height:30px;font:inherit;font-size:12px;font-weight:600;cursor:pointer}' +
-  '.input .save:hover{filter:brightness(.95)}' +
-  // Positioned by _positionPanel (anchored above the dock chip) — no static
-  // corner offsets, or top+bottom would fight and stretch the drawer.
-  '' +
-  '' +
-  '' +
-  '' +
-  '' +
-  '' +
-  '';
+  '.input .save:hover{filter:brightness(.95)}';
+
+export const CAPTURE_STYLES = dock + overlay;
+export const STYLES = dock + handoff + overlay;

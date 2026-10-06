@@ -1,9 +1,8 @@
-import { anonymousHandle, modeFromUrl, resolveReviewer } from './identity';
-import { watchRoute } from './router';
-import { routeKey as routeOf } from './route-key';
-import { acquireStorage } from './safe-storage';
-import type { Mode, PinflowConfig } from './types';
+import { initialize } from './runtime';
 import { Annotator } from './ui/annotator';
+import type { PinflowConfig } from './types';
+export { destroy, version } from './runtime';
+export { routeKey as routeOf } from './route-key';
 
 export type {
   ActivationConfig,
@@ -30,24 +29,6 @@ export type {
   VoiceMeta,
 } from './types';
 
-// Injected by tsup `define` at build time (src/globals.d.ts); the `typeof`
-// guard keeps vitest — which runs source without the define — working.
-export const version = typeof __PINFLOW_VERSION__ !== 'undefined' ? __PINFLOW_VERSION__ : '0.0.0';
-
-// Twin of `isLocalOrigin` in src/voice/transcription/token.ts — duplicated
-// (3 lines of predicate) because core must never runtime-import from voice;
-// keep the two in sync.
-function isLocalOrigin(hostname: string): boolean {
-  return (
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname === '[::1]' ||
-    hostname === '0.0.0.0' ||
-    hostname.endsWith('.local') ||
-    hostname.endsWith('.localhost')
-  );
-}
-
 export interface Handle {
   destroy(): void;
   /**
@@ -70,108 +51,21 @@ export interface Handle {
   downloadExport(): void;
 }
 
-// SSR and declined-identity installs return an inert handle with the full API
+// SSR and declined-identity installs get an inert handle with the full API
 // (one shared noop: '' for the export getters, ignored for the void methods).
-function noopHandle(): Handle {
-  const n = (): '' => '';
-  return { destroy: n, refreshRoute: n, exportJSON: n, exportMarkdown: n, downloadExport: n };
-}
-
-let current: Handle | null = null;
+const n = (): '' => '';
 
 export function init(config: PinflowConfig): Handle {
-  if (typeof window === 'undefined' || typeof document === 'undefined') {
-    return noopHandle();
-  }
-  // Fail loud: hosts often call init() inside framework effects that swallow
-  // throws — surface the failure on the console before rethrowing.
-  try {
-    return initLive(config);
-  } catch (e) {
-    console.error('[pinflow] init failed:', e);
-    throw e;
-  }
-}
-
-function initLive(config: PinflowConfig): Handle {
-  // The devOnlyToken guardrail is a LOUD, EARLY failure by design (types.ts
-  // promises "throws at init"). token.ts re-checks lazily as defense in depth.
-  if (config.voice?.devOnlyToken && !isLocalOrigin(window.location.hostname)) {
-    throw new Error(
-      'pinflow: voice.devOnlyToken needs a local origin — use voice.tokenEndpoint in production',
-    );
-  }
-  if (current) {
-    console.warn('[pinflow] another instance is active — replacing it');
-    current.destroy();
-  }
-
-  const storage = acquireStorage();
-  const mode: Mode = config.mode ?? modeFromUrl(window.location.href) ?? 'reviewer';
-  const stealth = config.activation?.mode === 'stealth';
-  // Nobody is asked who they are at page load. A reviewer gets a minted
-  // handle so they have a corpus immediately, and the export sheet asks for a
-  // name at the one moment attribution matters. Stealth mints nothing here —
-  // it must not even write storage before its first activation, so identity is
-  // deferred to the gesture (resolveIdentity).
-  const reviewer =
-    config.reviewer ??
-    resolveReviewer({
-      url: window.location.href,
-      storage,
-      project: config.project,
-      ...(mode === 'reviewer' && !stealth ? { mint: anonymousHandle } : {}),
-    }) ??
-    (mode === 'builder' ? '__builder__' : null);
-
-  if (!reviewer && !stealth) return noopHandle();
-
-  const annotator = new Annotator({
+  return initialize<Annotator, Handle>(
     config,
-    reviewer,
-    mode,
-    storage,
-    ...(reviewer
-      ? {}
-      : {
-          resolveIdentity: () =>
-            resolveReviewer({
-              url: window.location.href,
-              storage,
-              project: config.project,
-              mint: anonymousHandle,
-            }),
-        }),
-  });
-  const watcher = watchRoute(() => annotator.refreshRoute());
-
-  const handle: Handle = {
-    destroy() {
-      watcher.stop();
-      annotator.destroy();
-      if (current === handle) current = null;
-    },
-    refreshRoute() {
-      annotator.refreshRoute();
-    },
-    exportJSON: () => annotator.exportJSON(),
-    exportMarkdown: () => annotator.exportMarkdown(),
-    downloadExport: () => annotator.downloadExport(),
-  };
-  current = handle;
-  const n = annotator._count;
-  console.info(
-    // Fallback must mirror Annotator._activationMode's default.
-    `[pinflow] v${version} ready — mode=${mode}, activation=${
-      config.activation?.mode ?? 'both'
-    }, ${n} comment${n === 1 ? '' : 's'}`,
+    Annotator,
+    (annotator) => ({
+      exportJSON: () => annotator.exportJSON(),
+      exportMarkdown: () => annotator.exportMarkdown(),
+      downloadExport: () => annotator.downloadExport(),
+    }),
+    { destroy: n, refreshRoute: n, exportJSON: n, exportMarkdown: n, downloadExport: n },
   );
-  return handle;
-}
-
-export function destroy(): void {
-  current?.destroy();
-  current = null;
 }
 
 // The full artifact toolkit is public: all four are DOM-free pure functions,
@@ -179,4 +73,3 @@ export function destroy(): void {
 // rows with these — no widget, no DOM). Tree-shaken away for widget-only use.
 export { exportBuilder, exportFilename, exportJSON, exportReviewer } from './export';
 export type { DescribeRoute, ExportMeta, IsOrphaned } from './export';
-export { routeOf };

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { exportFeedback } from './export-helper';
 import { test, expect } from '@playwright/test';
 
 // A pin taken inside a modal is bound to that layer (0.12.0). In a real
@@ -74,11 +74,7 @@ test('the export names the layer, and a closed dialog reads as parked', async ({
   await page.locator('#close-dialog').click();
   await expect(page.locator(PIN)).toBeHidden();
   await page.locator('button.chip').click();
-  const [download] = await Promise.all([
-    page.waitForEvent('download'),
-    page.locator('button:has-text("Export & share")').click(),
-  ]);
-  const md = readFileSync((await download.path())!, 'utf8');
+  const { content: md } = await exportFeedback(page);
   expect(md).toContain('## Orphaned comments');
   expect(md).toContain('**Layer:** dialog ‘Add Patients’ (parked)');
 });

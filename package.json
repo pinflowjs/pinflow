@@ -62,6 +62,16 @@
       "types": "./dist/instrumentation.d.ts",
       "import": "./dist/instrumentation.js",
       "require": "./dist/instrumentation.cjs"
+    },
+    "./capture": {
+      "types": "./dist/capture.d.ts",
+      "import": "./dist/capture.js",
+      "require": "./dist/capture.cjs"
+    },
+    "./handoff": {
+      "types": "./dist/handoff.d.ts",
+      "import": "./dist/handoff.js",
+      "require": "./dist/handoff.cjs"
     }
   },
   "files": [
@@ -127,7 +137,7 @@
     {
       "name": "core (IIFE, gz)",
       "path": "dist/pinflow.iife.js",
-      "limit": "30.81 KB",
+      "limit": "31.81 KB",
       "gzip": true,
       "ignore": [
         "pinflowjs/voice"
@@ -136,7 +146,7 @@
     {
       "name": "core (ESM, gz)",
       "path": "dist/index.js",
-      "limit": "30.68 KB",
+      "limit": "31.64 KB",
       "gzip": true,
       "ignore": [
         "pinflowjs/voice"
@@ -167,6 +177,21 @@
         "pinflowjs",
         "vue"
       ]
+    },
+    {
+      "name": "capture (ESM, gz)",
+      "path": "dist/capture.js",
+      "limit": "23.81 KB",
+      "gzip": true,
+      "ignore": [
+        "pinflowjs/voice"
+      ]
+    },
+    {
+      "name": "handoff (ESM, gz)",
+      "path": "dist/handoff.js",
+      "limit": "6.11 KB",
+      "gzip": true
     }
   ],
   "engines": {

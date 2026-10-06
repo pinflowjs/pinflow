@@ -1,3 +1,4 @@
+import { exportFeedback } from './export-helper';
 import { test, expect } from '@playwright/test';
 
 // Helper: Playwright auto-pierces shadow DOM, so we can use regular selectors.
@@ -5,7 +6,6 @@ import { test, expect } from '@playwright/test';
 // arms annotate mode; the count chip summons the export sheet.
 const CONTROL = 'button.arm';
 const CHIP = 'button.chip';
-const EXPORT_BTN = 'button:has-text("Export & share")';
 const PIN = 'button.pin';
 const TEXTAREA = '[data-pinflow-root] textarea';
 const SAVE_BUTTON = '[data-pinflow-root] button.save';
@@ -65,7 +65,7 @@ test('AC4: reviewer isolation', async ({ page }) => {
   await expect(page.locator(PIN)).toHaveCount(0);
 });
 
-// §11.5 — Reviewer export downloads markdown
+// §11.5 — Reviewer export downloads on desktop and shares on mobile
 test('AC5: reviewer export', async ({ page }) => {
   await page.goto('/?reviewer=Eve');
   await page.locator(CONTROL).click();
@@ -75,11 +75,8 @@ test('AC5: reviewer export', async ({ page }) => {
   await page.waitForTimeout(300);
 
   await page.locator(CHIP).click();
-  const [download] = await Promise.all([
-    page.waitForEvent('download'),
-    page.locator(EXPORT_BTN).click(),
-  ]);
-  expect(download.suggestedFilename()).toMatch(/^pinflow-feedback-Eve-e2e-test-.+\.md$/);
+  const artifact = await exportFeedback(page);
+  expect(artifact.filename).toMatch(/^pinflow-feedback-Eve-e2e-test-.+\.md$/);
 });
 
 // §11.6 — Builder mode shows all reviewers' comments
@@ -128,13 +125,7 @@ test('AC8: export markdown has selector candidates and element context', async (
   await page.waitForTimeout(300);
 
   await page.locator(CHIP).click();
-  const [download] = await Promise.all([
-    page.waitForEvent('download'),
-    page.locator(EXPORT_BTN).click(),
-  ]);
-  const path = await download.path();
-  const fs = await import('node:fs/promises');
-  const md = await fs.readFile(path!, 'utf-8');
+  const { content: md } = await exportFeedback(page);
 
   expect(md).toContain('# Feedback for e2e-test — from Zara');
   expect(md).toContain('**Selector candidates:**');
@@ -189,13 +180,7 @@ test('AC12: marquee drag creates an area comment with an Area export line', asyn
   await page.waitForTimeout(300);
 
   await page.locator(CHIP).click();
-  const [download] = await Promise.all([
-    page.waitForEvent('download'),
-    page.locator(EXPORT_BTN).click(),
-  ]);
-  const path = await download.path();
-  const fs = await import('node:fs/promises');
-  const md = await fs.readFile(path!, 'utf-8');
+  const { content: md } = await exportFeedback(page);
   expect(md).toContain('**Area:**');
   expect(md).toContain('> This whole area');
 

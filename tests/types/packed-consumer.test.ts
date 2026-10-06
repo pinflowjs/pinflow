@@ -19,6 +19,17 @@ describe('packed package type surface', () => {
       import type { PinflowTheme, PinflowConfig, Comment, Handle, AreaPercent } from './dist/index';
       import { createVerification, feedbackRevision } from './dist/verification';
       import { pinflowSource } from './dist/instrumentation';
+      import { init as initCapture } from './dist/capture';
+      import { prepareHandoff } from './dist/handoff';
+      const capture = initCapture({ project: 'capture', expectedOutcome: true });
+      const artifact = prepareHandoff(capture.getSnapshot());
+      const markdown: string = artifact.markdown;
+      const share: Promise<'shared' | 'cancelled' | 'unavailable'> = artifact.share();
+      // @ts-expect-error Capture hosts use the optional handoff adapter.
+      capture.exportMarkdown();
+      // @ts-expect-error Builder aggregation remains in the full entry.
+      initCapture({ project: 'capture', mode: 'builder' });
+      export { markdown, share };
       import type { FeedbackContext, CapturePoint, CaptureDetails, TargetResolution } from './dist/index';
       const point: CapturePoint = {clientX: 10, clientY: 20};
       const details: CaptureDetails = {state: ['checked=true']};

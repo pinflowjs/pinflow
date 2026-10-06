@@ -605,15 +605,18 @@ describe('Annotator submission moment (L1.6)', () => {
     expect(shadow().querySelector('.panel p')?.textContent).toBe('Copied to your clipboard.');
   });
 
-  it('a failed clipboard write says so instead of claiming success', async () => {
+  it('a failed clipboard write says so and hands over the text to copy by hand', async () => {
     mockDownloadPlumbing();
     mockClipboard(false); // no navigator.clipboard at all
     await exportViaSheet();
     findButton('Copy to Clipboard')!.click();
     await flushMicrotasks();
     expect(shadow().querySelector('.panel p')?.textContent).toBe(
-      'Copy failed — use the download instead.',
+      'Copy unavailable. Select and copy the feedback below.',
     );
+    const field = shadow().querySelector<HTMLTextAreaElement>('.panel textarea.manual-copy');
+    expect(field?.readOnly).toBe(true);
+    expect(field?.value).toContain(`# Feedback for ${PROJECT}`);
   });
 
   // review #23, re-applied to the retry path: a slow clipboard must not write

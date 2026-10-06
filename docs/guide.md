@@ -25,6 +25,61 @@ Local storage also defines the limits of that setup:
 Use [backend sync](#connect-your-own-backend) when feedback must follow a reviewer across
 devices, appear in a team workspace, or survive cleared browser data.
 
+## Smaller capture entry for custom submission interfaces
+
+Use `pinflowjs/capture` when your app owns the submission interface. It includes pinning,
+editing, local persistence, backend sync, optional voice, target evidence and scope capture.
+It omits the export chip, export sheet, bulk clear controls and artifact serializers.
+The regular `pinflowjs` entry and framework wrappers continue to include the full widget.
+
+```ts
+import { init } from 'pinflowjs/capture';
+
+const capture = init({
+  project: 'my-prototype',
+  expectedOutcome: true,
+});
+
+// When opening YOUR submission panel, after the reviewer saves their draft:
+const { prepareHandoff } = await import('pinflowjs/handoff');
+const artifact = prepareHandoff(capture.getSnapshot());
+
+// Enable your Share button only after preparation completes.
+shareButton.onclick = () => {
+  void artifact.share().then((result) => {
+    if (result === 'unavailable') {
+      // Offer a Copy button or selectable artifact.markdown in your interface.
+    }
+    // Cancellation or a closed share sheet never authorizes deleting comments.
+  });
+};
+copyButton.onclick = () => void artifact.copy();
+downloadButton.onclick = () => artifact.download();
+```
+
+`getSnapshot()` returns `{ store, targets }`, detached from live state. It reads committed
+comments, reconciles durable changes and checks current-route targets. Unsaved text in an
+open editor is excluded. Other routes report `not-checked`; unavailable targets retain their
+historical evidence. Editing a returned snapshot does not alter stored comments.
+
+`prepareHandoff(snapshot, { describeRoute? })` freezes `markdown`, `json` and `filename`.
+Its actions keep sending that artifact if feedback changes later; prepare again to include
+new edits. `share()` returns `shared`, `cancelled` or `unavailable`; `copy()` returns a boolean;
+`download()` starts a file download without copying. Sharing uses the platform's native sheet
+on supported iOS/Android browsers, with attachment/text fallback. A successful share promise
+is not confirmation of recipient delivery. Keep comments until the reviewer explicitly removes them.
+
+Prepare before the final tap: awaiting a dynamic import inside the Share click handler can
+lose the browser's required user activation. Lazy loading reduces initial transfer; users who
+export also fetch the handoff entry. Capturing alone never imports it.
+
+`CaptureConfig` omits `mode`, `onSubmit`, `exportUi` and `describeRoute`. Capture always runs
+in reviewer mode; use the full entry for builder aggregation. Use `onChange`/`source` normally
+for backend sync, and pass `describeRoute` to `prepareHandoff` if needed. The capture handle
+has `destroy()`, `refreshRoute()` and `getSnapshot()`; it does not expose the full handle's
+export methods. Both entries share the active page instance, so initializing either replaces
+and disposes the other. Calling an old handle's `destroy()` cannot destroy its replacement.
+
 ## Frameworks
 
 Install the package when your app uses a bundler:
@@ -231,9 +286,22 @@ into the widget, and Pinflow styles do not leak into the host page.
 
 ## Export and share feedback
 
-The default export action does two things: it downloads a Markdown file and copies the same
+On touch devices, **Export & share** opens the native share sheet so you can choose an app,
+contact, or nearby device. Pinflow shares a Markdown file when supported, otherwise a text
+attachment with the same content, or the full text. Canceling keeps your feedback. If sharing
+is unavailable, use **Copy to Clipboard**; if copying is blocked too, a selectable text box
+lets you copy manually. No download starts automatically on touch devices, including tablets
+with a mouse or trackpad. Available destinations depend on your browser and installed apps.
+
+On desktop without touch input, the action downloads a Markdown file and copies the same
 content to the clipboard. The result is readable on its own and can be pasted into an issue,
-pull request, project document, or coding assistant.
+pull request, project document, or coding assistant. If the page blocks the clipboard, as
+sandboxed preview frames often do, **Copy to Clipboard** shows the feedback in a selected text
+box so you can copy it yourself. The explicit `downloadExport()` API
+continues to download and copy on every device.
+
+The comment editor follows the visible viewport when the keyboard opens, closes, or pans
+the page. When space is short, scroll inside the editor to reach its remaining fields and Save.
 
 Each comment includes the reviewer's words plus the information needed to find the target
 again:
@@ -309,12 +377,13 @@ existing `AGENTS.md`. See [`agent/README.md`](./agent/README.md).
 It added an **Email it to the builder** button that opened a prefilled `mailto:` draft. The
 recipient was the host's guess and Pinflow knows nothing about the reviewer beyond a display
 name, so the action handed someone a half-written email to finish themselves. The export
-confirmation now offers **Download** and **Copy to Clipboard** as buttons instead, which are the
-two things the widget can actually do.
+confirmation offers **Share feedback** on touch devices, **Download Feedback Markdown** on
+desktop, and **Copy to Clipboard** on both. Native sharing lets the reviewer choose the recipient.
 
 If you were using it, `onSubmit` below gives you a host-owned function to send the store
 wherever you like, and `onChange`/`source` sync to a backend. If you just wanted the file in
-someone's inbox, the reviewer already has it downloaded and on their clipboard.
+someone's inbox, the reviewer can choose email from the native share sheet, attach the downloaded
+file, or paste a clipboard copy.
 
 ### Submit through your own function
 
