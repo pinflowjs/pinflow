@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.1.0
+
+### Minor Changes
+
+- 7c59e71: Add `pinflowjs/capture` for hosts that provide their own submission interface. It retains annotation, editing, persistence, voice integration, target evidence and scope capture while excluding the export UI and serializers. `getSnapshot()` returns detached committed feedback and current target diagnostics.
+
+  Add `pinflowjs/handoff` to prepare frozen Markdown/JSON artifacts on demand, with explicit native share, clipboard and download actions. Existing `pinflowjs` imports keep their synchronous export API and full widget. Both entries replace the same active instance, including when loaded from independently minified bundles.
+
+  `pinflowjs/capture` is about 24 kB gzipped against the full widget's 32 kB, and `pinflowjs/handoff` adds about 6 kB when a host loads it. Each has its own size check.
+
+### Patch Changes
+
+- ca06c61: Raise the core size ceilings for mobile feedback and the capture/handoff boundary, as an approved trade. Core rises from 30.81 kB (IIFE) and 30.68 kB (ESM) gzipped to 31.81 kB and 31.64 kB. About 0.8 kB buys keeping the editor and export panel inside the visible viewport while the keyboard is open, native sharing on touch devices and the manual-copy fallback. About 0.2 kB is the cost of splitting the controller so `pinflowjs/capture` ships without the handoff UI. The new entries get their own ceilings: 23.81 kB for capture and 6.11 kB for handoff. Every ceiling sits about 50 B over the CI measurement (31.76, 31.59, 23.76 and 6.06 kB), and the README badge reads 32 kB to match.
+- 7e0702b: Keep the feedback editor and export panel inside the visible viewport as the mobile keyboard opens or pans the page. Tall editors scroll internally, including inside transformed native dialogs.
+
+  Use native sharing on touch devices instead of automatic Markdown downloads. Share a Markdown file, a text attachment, or the full feedback text according to browser support. Canceling keeps the feedback, and the export sheet on touch devices describes sharing rather than a download.
+
+  When the clipboard is blocked, on any device, **Copy to Clipboard** now shows the feedback in a selected text box for a manual copy — sandboxed preview frames block the clipboard on desktop too.
+
 ## 1.0.1
 
 ### Patch Changes
